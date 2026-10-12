@@ -9,6 +9,7 @@ from pathlib import Path
 import psutil
 from PIL import ImageDraw
 
+from .dictionary import load_dictionary, save_dictionary
 from .engine import LocalPaddleEngine
 from .paragraphs import restore_paragraphs
 from .pdf import page_count, render_pages
@@ -57,6 +58,9 @@ def main():
     parser.add_argument(
         "--repair-spacing", action="store_true", help="로컬 Kiwi로 띄어쓰기 보정 제안"
     )
+    parser.add_argument(
+        "--dictionary", type=Path, help="띄어쓰기 보정에 사용할 로컬 JSON 사전"
+    )
     region_options = parser.add_mutually_exclusive_group()
     region_options.add_argument(
         "--region", help="상대 좌표: 왼쪽,위쪽,오른쪽,아래쪽 (0~1)"
@@ -69,6 +73,14 @@ def main():
     )
     parser.add_argument("--regions-file", type=Path, help="페이지별 상대 좌표 JSON")
     args = parser.parse_args()
+    dictionary = None
+    if args.dictionary:
+        if not args.repair_spacing or args.engine != "paddle":
+            parser.error("사용자 사전은 PP-OCRv5의 --repair-spacing과 함께 사용하세요.")
+        try:
+            dictionary = load_dictionary(args.dictionary)
+        except (ValueError, OSError, TypeError) as error:
+            parser.error(str(error))
     if args.keep_line_breaks and args.repair_spacing:
         parser.error("띄어쓰기 보정은 문단 복원과 함께 사용하세요.")
     if not args.pdf.is_file() or args.dpi < 72:
@@ -101,6 +113,8 @@ def main():
         parser.error(str(error))
     # Unique output directories protect previous results and user edits.
     args.output.mkdir(parents=True, exist_ok=False)
+    if dictionary:
+        save_dictionary(args.output / "dictionary.json", dictionary)
     socket.socket.connect = deny_connection
     socket.socket.connect_ex = deny_connection
     start = time.perf_counter()
@@ -125,7 +139,7 @@ def main():
     if args.repair_spacing:
         from .spacing import LocalSpacingRepair
 
-        spacing = LocalSpacingRepair()
+        spacing = LocalSpacingRepair(dictionary)
     records = []
     combined = []
     try:
@@ -203,6 +217,7 @@ def main():
                     "network_connections_blocked": True,
                     "paragraph_restoration": not args.keep_line_breaks,
                     "spacing_repair": args.repair_spacing,
+                    "dictionary": dictionary.identity() if dictionary else None,
                     "total_pages": total_pages,
                     "selected_pages": pages,
                     "default_region": region.values(),

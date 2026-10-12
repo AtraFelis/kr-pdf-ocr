@@ -198,3 +198,204 @@ def test_real_process_cancel_preserves_partial_result(window, tmp_path):
     assert window.editor.toPlainText() == "완료된 결과"
     assert window.progress.value() == 1 and window.progress.maximum() == 2
     assert "취소됨" in window.status.text()
+
+
+def test_dictionary_snapshot_stays_fixed_and_vlm_disables_selection(window, tmp_path):
+    """작업 사전이 이후 편집과 분리되며 VLM에서는 선택을 비활성화한다."""
+    from pdf_ocr.dictionary import UserDictionary, load_dictionary, save_dictionary
+
+    path = tmp_path / "user_data" / "dictionaries" / "example.json"
+    initial = UserDictionary("예시", ("하루카",))
+    save_dictionary(path, initial)
+    window.refresh_dictionaries(path)
+    session = tmp_path / "snapshot"
+    session.mkdir()
+    snapshot = window.dictionary_snapshot(session)
+    save_dictionary(path, UserDictionary("변경", ("푸른별 연구소",)), overwrite=True)
+    assert load_dictionary(snapshot) == initial
+    window.model.setCurrentIndex(window.model.findData("vl16"))
+    assert not window.dictionary_choice.isEnabled()
+    window.model.setCurrentIndex(window.model.findData("paddle"))
+    assert window.dictionary_choice.isEnabled()
+
+
+def test_dictionary_dialog_save_conflict_and_discard(
+    application, tmp_path, monkeypatch
+):
+    """사전 저장·단어 편집과 충돌 거부·미저장 닫기 확인을 검증한다."""
+    from pdf_ocr.dictionary import load_dictionary
+    from pdf_ocr.dictionary_ui import DictionaryDialog
+
+    messages = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: messages.append(args[2]))
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args: QMessageBox.StandardButton.No
+    )
+    dialog = DictionaryDialog(tmp_path / "dictionaries")
+    dialog.name.setText("합성 사전")
+    dialog.words.setPlainText("하루카\n하루카\n푸른별 연구소")
+    dialog.save()
+    assert load_dictionary(dialog.selected).words == ("하루카", "푸른별 연구소")
+    before = dialog.selected.read_bytes()
+    dialog.words.setPlainText("푸른별연구소\n푸른별 연구소")
+    dialog.save()
+    assert messages and dialog.selected.read_bytes() == before
+    dialog.show()
+    application.processEvents()
+    dialog.reject()
+    assert dialog.isVisible()
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes
+    )
+    dialog.reject()
+    assert not dialog.isVisible()
+
+
+def test_bad_dictionary_txt_import_keeps_editor(application, tmp_path, monkeypatch):
+    """잘못된 TXT 가져오기로 기존 사전 편집을 지우지 않는다."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from pdf_ocr.dictionary_ui import DictionaryDialog
+
+    source = tmp_path / "invalid.txt"
+    source.write_bytes(b"\xff")
+    dialog = DictionaryDialog(tmp_path / "dictionaries")
+    dialog.name.setText("기존")
+    dialog.words.setPlainText("하루카")
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args: (str(source), ""))
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: None)
+    dialog.import_txt()
+    assert dialog.words.toPlainText() == "하루카"
+    assert dialog.name.text() == "기존"
+    dialog.clean = (dialog.name.text(), dialog.words.toPlainText())
+    dialog.close()
+
+
+def test_real_reprocess_preserves_user_edit(window, tmp_path, monkeypatch):
+    """실제 재보정 프로세스가 현재 편집을 유지하고 별도 비교 결과를 생성한다."""
+    import json
+
+    from PySide6.QtCore import QProcess
+
+    from pdf_ocr.dictionary import UserDictionary, save_dictionary
+    from pdf_ocr.dictionary_ui import ComparisonDialog
+
+    source = tmp_path / "page-001.json"
+    record = {
+        "page": 1,
+        "lines": [
+            {
+                "text": "푸른별연구소에서 하루카를 만났다.",
+                "polygon": [[0, 0], [500, 0], [500, 20], [0, 20]],
+            }
+        ],
+    }
+    source.write_text(json.dumps(record), encoding="utf-8")
+    path = tmp_path / "user_data" / "dictionaries" / "example.json"
+    save_dictionary(path, UserDictionary("예시", ("푸른별 연구소", "하루카")))
+    window.refresh_dictionaries(path)
+    window.editor.setPlainText("사용자 편집본")
+    window.editor.document().setModified(True)
+    compared = []
+    monkeypatch.setattr(
+        ComparisonDialog, "exec", lambda self: compared.append(self.windowTitle())
+    )
+    window.start_reprocess(source)
+    assert window.process.waitForStarted(3000)
+    for _ in range(1200):
+        QTest.qWait(25)
+        if window.process.state() == QProcess.ProcessState.NotRunning:
+            break
+    if window.running():
+        window.process.kill()
+        window.process.waitForFinished(3000)
+        pytest.fail("재보정 실행 시간 초과")
+    assert window.process.exitCode() == 0, window.log_buffer
+    assert compared
+    assert window.editor.toPlainText() == "사용자 편집본"
+    assert window.editor.document().isModified()
+    assert "푸른별 연구소" in (window.comparison_folder / "combined.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "재보정 완료" in window.status.text()
+
+
+def test_dictionary_delete_and_export(application, tmp_path, monkeypatch):
+    """저장 사전의 UTF-8 내보내기와 확인된 삭제를 검증한다."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from pdf_ocr.dictionary_ui import DictionaryDialog
+
+    dialog = DictionaryDialog(tmp_path / "dictionaries")
+    dialog.name.setText("예시")
+    dialog.words.setPlainText("하루카\n푸른별 연구소")
+    dialog.save()
+    path = dialog.selected
+    export = tmp_path / "words.txt"
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", lambda *args, **kwargs: (str(export), "")
+    )
+    dialog.export_txt()
+    assert export.read_text(encoding="utf-8") == "하루카\n푸른별 연구소\n"
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args: QMessageBox.StandardButton.No
+    )
+    dialog.delete()
+    assert path.exists()
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes
+    )
+    dialog.delete()
+    assert not path.exists() and dialog.selected is None
+    dialog.close()
+
+
+def test_cancelled_reprocess_keeps_edit_and_comparison(window, tmp_path, monkeypatch):
+    """취소된 재보정의 완료 비교 결과를 열어도 현재 편집본을 유지한다."""
+    from PySide6.QtCore import QProcess
+
+    from pdf_ocr.dictionary_ui import ComparisonDialog
+
+    folder = tmp_path / "comparison" / "result"
+    folder.mkdir(parents=True)
+    for name in ("combined.txt", "without-dictionary.txt", "before-spacing.txt"):
+        (folder / name).write_text("완료된 비교 결과", encoding="utf-8")
+    window.comparison_folder = folder
+    window.job_kind = "reprocess"
+    window.cancelled = True
+    window.editor.setPlainText("보호할 편집본")
+    window.editor.document().setModified(True)
+    monkeypatch.setattr(ComparisonDialog, "exec", lambda self: None)
+    window.process_finished(1, QProcess.ExitStatus.CrashExit)
+    assert window.editor.toPlainText() == "보호할 편집본"
+    assert window.editor.document().isModified()
+    assert "취소" in window.status.text()
+
+
+def test_comparison_export_confirmation(application, tmp_path, monkeypatch):
+    """별도 비교 결과 저장은 덮어쓰기 확인을 따르며 기존 출력을 보호한다."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from pdf_ocr.dictionary_ui import ComparisonDialog
+
+    folder = tmp_path / "comparison"
+    folder.mkdir()
+    for name in ("combined.txt", "without-dictionary.txt", "before-spacing.txt"):
+        (folder / name).write_text("합성 재보정 결과", encoding="utf-8")
+    dialog = ComparisonDialog(folder)
+    target = tmp_path / "saved.txt"
+    target.write_text("기존 결과", encoding="utf-8")
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", lambda *args, **kwargs: (str(target), "")
+    )
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args: QMessageBox.StandardButton.No
+    )
+    dialog.save_result()
+    assert target.read_text(encoding="utf-8") == "기존 결과"
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes
+    )
+    dialog.save_result()
+    assert target.read_text(encoding="utf-8") == "합성 재보정 결과"
+    dialog.close()

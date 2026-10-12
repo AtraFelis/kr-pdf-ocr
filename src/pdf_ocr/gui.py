@@ -40,6 +40,8 @@ from PySide6.QtWidgets import (
 )
 
 from .devices import ocr_python
+from .dictionary import load_dictionary, save_dictionary
+from .dictionary_ui import ComparisonDialog, DictionaryDialog
 from .pdf import page_count, render_pages
 from .preview import PagePreview
 from .selection import Region, select_pages
@@ -116,6 +118,8 @@ class OCRWindow(QMainWindow):
         self.cancelled = False
         self.closing_after_cancel = False
         self.run_folder = None
+        self.job_kind = "ocr"
+        self.comparison_folder = None
         self.log_buffer = ""
         self.completed = set()
         self.process = QProcess(self)
@@ -206,7 +210,19 @@ class OCRWindow(QMainWindow):
         self.repair.setToolTip(
             "글자는 유지하며 공백만 보정합니다. 고유명사 등은 원문 확인이 필요합니다."
         )
+        self.repair.toggled.connect(self.update_spacing_option)
         self.model.currentIndexChanged.connect(self.update_spacing_option)
+        side.addWidget(QLabel("고유명사 사전 · 선택 사항"))
+        self.dictionary_choice = QComboBox()
+        self.dictionary_choice.setToolTip(
+            "PP-OCRv5 띄어쓰기 보정에 적용합니다. 글자 오인식은 바꾸지 않습니다."
+        )
+        side.addWidget(self.dictionary_choice)
+        self.dictionary_button = QPushButton("사전 관리")
+        self.dictionary_button.clicked.connect(self.manage_dictionary)
+        side.addWidget(self.dictionary_button)
+        self.refresh_dictionaries()
+        self.update_spacing_option()
         self.keep_hanja = QCheckBox("병기 한자 유지")
         side.addWidget(self.keep_hanja)
         panels.addWidget(self.sidebar)
@@ -273,6 +289,14 @@ class OCRWindow(QMainWindow):
         )
         self.review_label.setWordWrap(True)
         right.addWidget(self.review_label)
+        comparison_actions = QHBoxLayout()
+        self.compare_button = QPushButton("현재 OCR 재보정·비교")
+        self.compare_button.clicked.connect(self.start_reprocess)
+        comparison_actions.addWidget(self.compare_button)
+        self.saved_compare_button = QPushButton("저장 OCR 열어 비교")
+        self.saved_compare_button.clicked.connect(self.choose_reprocess)
+        comparison_actions.addWidget(self.saved_compare_button)
+        right.addLayout(comparison_actions)
         panels.addWidget(result_panel)
         panels.setSizes([230, 600, 480])
         bottom = QHBoxLayout()
@@ -315,6 +339,8 @@ class OCRWindow(QMainWindow):
         self.cancel_button.setEnabled(busy)
         self.editor.setReadOnly(busy)
         self.save_button.setEnabled(not busy and bool(self.editor.toPlainText()))
+        self.compare_button.setEnabled(not busy and self.run_folder is not None)
+        self.saved_compare_button.setEnabled(not busy)
 
     def update_save_button(self):
         """OCR이 멈춰 있고 편집기에 내용이 있을 때만 저장 버튼을 활성화한다."""
@@ -330,6 +356,50 @@ class OCRWindow(QMainWindow):
             if self.model.currentData() == "paddle"
             else "이 모델은 자체 문단 형태를 출력하므로 별도 띄어쓰기 보정을 적용하지 않습니다."
         )
+        if hasattr(self, "dictionary_choice"):
+            self.dictionary_choice.setEnabled(
+                self.model.currentData() == "paddle" and self.repair.isChecked()
+            )
+            self.dictionary_choice.setToolTip(
+                "사전은 PP-OCRv5의 띄어쓰기 보정에 적용합니다. 글자 오인식은 바꾸지 않습니다."
+                if self.model.currentData() == "paddle" and self.repair.isChecked()
+                else "사용하려면 PP-OCRv5와 한국어 띄어쓰기 보정을 선택하세요. VL·Qwen은 현재 지원하지 않습니다."
+            )
+
+    def refresh_dictionaries(self, selected=None):
+        """로컬 사전 목록을 읽어 선택을 유지하며 깨진 파일은 실행 시 검사한다."""
+        selected = selected or self.dictionary_choice.currentData()
+        self.dictionary_choice.clear()
+        self.dictionary_choice.addItem("사용하지 않음", None)
+        for path in sorted((self.root / "user_data" / "dictionaries").glob("*.json")):
+            try:
+                dictionary = load_dictionary(path)
+                title = f"{dictionary.name} · {len(dictionary.words)}개"
+            except (OSError, ValueError, TypeError):
+                title = f"{path.stem} · 파일 확인 필요"
+            self.dictionary_choice.addItem(title, str(path))
+        index = self.dictionary_choice.findData(str(selected)) if selected else 0
+        self.dictionary_choice.setCurrentIndex(max(index, 0))
+
+    def manage_dictionary(self):
+        """사전 관리 창을 열고 저장·삭제 후 선택 목록을 갱신한다."""
+        dialog = DictionaryDialog(
+            self.root / "user_data" / "dictionaries",
+            self.dictionary_choice.currentData(),
+            self,
+        )
+        dialog.exec()
+        self.refresh_dictionaries(dialog.selected)
+
+    def dictionary_snapshot(self, session):
+        """선택 사전을 검증해 작업 전용 파일로 고정하고 없으면 None을 반환한다."""
+        path = self.dictionary_choice.currentData()
+        if not path:
+            return None
+        dictionary = load_dictionary(Path(path))
+        snapshot = session / "dictionary.json"
+        save_dictionary(snapshot, dictionary)
+        return snapshot
 
     def update_device_notice(self):
         """선택 장치와 모델에 따라 CPU 자원 또는 GPU 실행 환경 안내를 표시한다."""
@@ -396,6 +466,7 @@ class OCRWindow(QMainWindow):
             self.page_list.addItem(item)
         self.updating_pages = False
         self.editor.clear()
+        self.run_folder = None
         self.editor.document().setModified(False)
         self.page_list.setCurrentRow(0)
         self.status.setText("페이지와 영역을 선택한 뒤 OCR을 실행하세요.")
@@ -528,7 +599,12 @@ class OCRWindow(QMainWindow):
                 ),
                 encoding="utf-8",
             )
-        except OSError as error:
+            snapshot = (
+                self.dictionary_snapshot(session)
+                if self.repair.isChecked() and self.model.currentData() == "paddle"
+                else None
+            )
+        except (OSError, ValueError, TypeError) as error:
             QMessageBox.warning(self, "작업 시작 실패", str(error))
             return
         self.run_folder = session / "result"
@@ -550,6 +626,8 @@ class OCRWindow(QMainWindow):
         ]
         if self.repair.isChecked() and self.model.currentData() == "paddle":
             args.append("--repair-spacing")
+            if snapshot:
+                args.extend(["--dictionary", str(snapshot)])
         if self.keep_hanja.isChecked():
             args.append("--keep-hanja")
         environment = QProcessEnvironment.systemEnvironment()
@@ -557,6 +635,7 @@ class OCRWindow(QMainWindow):
         self.process.setProcessEnvironment(environment)
         self.process.setWorkingDirectory(str(ROOT))
         self.cancelled = False
+        self.job_kind = "ocr"
         self.completed = set()
         self.log_buffer = ""
         self.editor.clear()
@@ -566,6 +645,66 @@ class OCRWindow(QMainWindow):
         self.status.setText("인식 모델을 준비하고 있습니다…")
         self.set_busy(True)
         self.process.start(ocr_python(self.root, self.model.currentData()), args)
+
+    def choose_reprocess(self):
+        """사용자가 선택한 단일 페이지의 저장 OCR JSON을 별도 출력으로 재보정한다."""
+        source, _ = QFileDialog.getOpenFileName(
+            self,
+            "원시 OCR 페이지 JSON 열기",
+            str(self.root / "output"),
+            "OCR JSON (page-*.json)",
+        )
+        if source:
+            self.start_reprocess(Path(source))
+
+    def start_reprocess(self, source=None):
+        """원시 JSON을 별도 프로세스에서 재보정하며 현재 편집 내용을 변경하지 않는다."""
+        if self.running():
+            return
+        from .restore import saved_pages
+
+        source = source if isinstance(source, Path) else self.run_folder
+        if source is None:
+            return
+        session = self.root / "output" / f"compare-{uuid4().hex[:12]}"
+        try:
+            pages = saved_pages(source)
+            session.mkdir(parents=True, exist_ok=False)
+            if self.model.currentData() != "paddle" or not self.repair.isChecked():
+                raise ValueError(
+                    "재보정 비교는 PP-OCRv5와 한국어 띄어쓰기 보정을 선택한 뒤 실행하세요."
+                )
+            snapshot = self.dictionary_snapshot(session)
+        except (OSError, ValueError, TypeError) as error:
+            QMessageBox.warning(self, "재보정 시작 실패", str(error))
+            return
+        self.comparison_folder = session / "result"
+        args = [
+            "-u",
+            "-m",
+            "pdf_ocr.restore",
+            str(source),
+            "--output",
+            str(self.comparison_folder),
+            "--repair-spacing",
+        ]
+        if snapshot:
+            args.extend(["--dictionary", str(snapshot)])
+        if self.keep_hanja.isChecked():
+            args.append("--keep-hanja")
+        environment = QProcessEnvironment.systemEnvironment()
+        environment.insert("PYTHONIOENCODING", "utf-8")
+        self.process.setProcessEnvironment(environment)
+        self.process.setWorkingDirectory(str(ROOT))
+        self.job_kind = "reprocess"
+        self.cancelled = False
+        self.completed = set()
+        self.log_buffer = ""
+        self.progress.setRange(0, len(pages))
+        self.progress.setValue(0)
+        self.set_busy(True)
+        self.status.setText("저장 결과를 재보정합니다. 현재 편집 내용은 유지됩니다…")
+        self.process.start(sys.executable, args)
 
     def read_process_output(self):
         """프로세스 출력을 누적하고 실제 완료 페이지로 진행률을 갱신한다."""
@@ -609,6 +748,9 @@ class OCRWindow(QMainWindow):
     def process_finished(self, code, status):
         """완료된 결과·로그를 복구하고 정상 완료·취소·실패 상태를 구분해 표시한다."""
         self.read_process_output()
+        if self.job_kind == "reprocess":
+            self.reprocess_finished(code, status)
+            return
         if self.run_folder is not None:
             try:
                 (self.run_folder.parent / "process.log").write_text(
@@ -640,6 +782,39 @@ class OCRWindow(QMainWindow):
             message.setWindowTitle("OCR 실행 오류")
             message.setText(
                 "OCR을 완료하지 못했습니다. 모델 설치 상태와 선택 영역을 확인하세요."
+            )
+            message.setDetailedText(self.log_buffer[-8000:])
+            message.exec()
+        if self.closing_after_cancel:
+            self.close()
+
+    def reprocess_finished(self, code, status):
+        """재보정 완료·부분 실패를 표시하고 기존 편집본 대신 별도 비교 창을 연다."""
+        self.set_busy(False)
+        folder = self.comparison_folder
+        success = (
+            code == 0
+            and status == QProcess.ExitStatus.NormalExit
+            and not self.cancelled
+        )
+        self.status.setText(
+            "재보정 완료 · 비교 결과는 별도로 저장했습니다."
+            if success
+            else "재보정 취소·중단 · 현재 편집과 완료된 비교 결과는 보존했습니다."
+        )
+        try:
+            (folder.parent / "process.log").write_text(
+                self.log_buffer, encoding="utf-8"
+            )
+            if (folder / "combined.txt").exists() and not self.closing_after_cancel:
+                ComparisonDialog(folder, self).exec()
+        except (OSError, ValueError) as error:
+            QMessageBox.warning(self, "비교 결과 읽기 실패", str(error))
+        if not success and not self.cancelled:
+            message = QMessageBox(self)
+            message.setWindowTitle("재보정 오류")
+            message.setText(
+                "저장 OCR의 좌표와 사전 파일을 확인하세요. 완료된 결과는 보존했습니다."
             )
             message.setDetailedText(self.log_buffer[-8000:])
             message.exec()

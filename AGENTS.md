@@ -52,15 +52,18 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine qwen --output "output/qwen-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 문단 복원과 선택적 한국어 띄어쓰기 보정
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --repair-spacing --output "output/restored-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 사전은 화면의 사전 관리에서 저장한 실제 JSON 경로를 지정한다
 # 저장된 OCR JSON 재처리(모델 재실행 없음)
 .\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02/page-001.json --repair-spacing --output "output/reprocessed-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 사전 적용 재보정: 단일 JSON 또는 결과 폴더 입력, 실제 사전 경로로 변경
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02 --repair-spacing --dictionary user_data/dictionaries/실제파일.json --output "output/dictionary-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 페이지 제외와 기준 높이 1000px의 200~800px 선택
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-3 --exclude-pages 2,3 --y-range 200,800 --reference-height 1000 --output "output/region-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 데스크톱 화면 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.gui
 # 검증
 .\.venv\Scripts\python.exe scripts/check_docstrings.py
-.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m pytest --basetemp "output/pytest-$(Get-Date -Format yyyyMMdd-HHmmss-fff)"
 .\.venv\Scripts\python.exe -m ruff check src scripts tests
 .\.venv\Scripts\python.exe -m ruff format --check src scripts tests
 ```
@@ -88,6 +91,7 @@ python -m venv .venv
 - 모델 버전·라이선스·실행 조건을 기록한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.
 - 기본 문단 복원은 단일 본문 영역만 처리한다. 좌표가 없거나 같은 높이에 영역이 겹치면 줄바꿈을 보존하고 확인 대상으로 남긴다. `--keep-line-breaks`로 복원을 끌 수 있다. `--repair-spacing`은 Kiwi 로컬 모델을 사용하는 선택 기능이며 공백을 제외한 글자가 변경되면 적용을 중단한다. 변경 제안과 모호한 연결은 JSON에 기록한다.
+- 사용자 사전은 [사용법](docs/USER_DICTIONARY.md)을 따른다. `user_data/`는 Git에서 제외한다. 작업 시작 시 사전을 고정하고 이름·버전·내용 식별값과 비교 결과를 기록한다. 사전은 PP-OCRv5 Kiwi 보정에만 적용하며 원문 글자·문단·편집본을 변경하지 않는다. 충돌 표기는 거부하고 겹치는 이름은 확인 대상으로 남긴다. 재보정은 새 출력 폴더·별도 비교 창을 사용한다.
 - 커밋과 PR은 하나의 변경 목적을 중심으로 구성하고 변경 이유와 검증 결과를 적는다.
 - Git 작업은 [Git 컨벤션](docs/rules/GIT_CONVENTIONS.md)을 따른다. 기본 브랜치는 `main`, 작업 브랜치는 `codex/<작업명>`이며 커밋은 `<type>(<scope>): <한국어 설명>` 형식을 사용한다. 관련 파일만 추가하고 커밋 전 스테이징 내용·제외 대상·검증 결과를 확인한다.
 - 사용자가 검토할 수 있는 하나의 완성된 작업 단위가 끝나면 검증 결과를 정리해 커밋하고 작업 브랜치를 푸시한 뒤 PR을 반드시 생성한다. 관련 기획·코드·테스트·문서는 같은 PR에 포함하고 작은 수정과 내부 개발 단계는 해당 PR에 누적한다. 파일·커밋·작은 수정마다 PR을 만들지 않는다. 독립적으로 검토·병합할 이유가 있거나 변경 규모·위험 때문에 분리가 필요할 때만 근거를 명시하고 나눈다. 이번 사용자 지시는 이후 작업 완료 시 푸시·PR 생성의 지속적인 승인으로 적용한다. 같은 작업에 속한 열린 PR은 갱신한다. 선행 작업이 미병합이라는 이유만으로 관련 변경을 별도 PR로 나누지 않는다. 분리가 필요한 의존 작업은 관계와 기준 브랜치를 명시해 중복 변경을 줄인다. PR 생성·갱신 결과와 실제 URL을 보고하며, 실패하면 원인과 조치를 알린다. 병합·강제 푸시·이력 재작성은 별도 사용자 지시 없이 진행하지 않는다.
