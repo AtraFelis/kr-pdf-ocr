@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-pdf-ocr"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["paddlepaddle==3.2.0", "paddleocr==3.3.0", "pypdf", "pypdfium2", "pillow", "psutil"]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest"]
+vl = ["torch==2.9.1", "torchvision==0.24.1", "transformers>=5.0,<6"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
