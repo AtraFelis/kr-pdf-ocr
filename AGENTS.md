@@ -33,11 +33,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe scripts/download_models.py
 .\.venv\Scripts\python.exe scripts/download_vl_model.py
 .\.venv\Scripts\python.exe scripts/download_vl_model.py --model qwen
+.\.venv\Scripts\python.exe scripts/download_vl_model.py --model paddle16
 # OCR 실행: 출력 폴더는 아직 존재하지 않는 새 경로를 지정
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --output "output/ocr-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # GPU VLM: 동일한 방식으로 별도 출력, CUDA 불가 시 CPU로 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine vl --output "output/vl-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 한국어 품질 비교 후보 Qwen
+.\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine vl16 --keep-line-breaks --output "output/vl16-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine qwen --output "output/qwen-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 문단 복원과 선택적 한국어 띄어쓰기 보정
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --repair-spacing --output "output/restored-$(Get-Date -Format yyyyMMdd-HHmmss)"

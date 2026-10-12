@@ -20,7 +20,7 @@ class LocalVLEngine:
         self.torch = torch
         self.prompt = (
             "OCR:"
-            if model_name == "PaddleOCR-VL-1.5"
+            if model_name.startswith("PaddleOCR-VL-")
             else "이미지에 보이는 모든 글자를 읽기 순서대로 그대로 옮겨 적어 주세요. "
             "띄어쓰기와 문단을 보존하고, 설명이나 요약을 추가하지 마세요. "
             "보이지 않는 내용을 추측하지 마세요."

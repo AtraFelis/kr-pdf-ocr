@@ -9,6 +9,7 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영�
 - [Git 컨벤션](docs/GIT_CONVENTIONS.md)
 - [GitHub 저장소 설명](docs/GITHUB_DESCRIPTION.md)
 - [문단 복원](docs/TEXT_RESTORATION.md)
+- [OCR 모델 선택 기준](docs/MODEL_SELECTION.md)
 
 ## 폴더
 
@@ -34,6 +35,6 @@ PaddleOCR CPU와 PaddleOCR-VL·Qwen GPU 후보를 비교했습니다. 최종 모
 
 출력 경로는 존재하지 않는 새 폴더를 지정합니다. `page-001-raw.txt`는 원시 인식 결과, `page-001.txt`는 병기 한자 제외 및 문단 복원 결과입니다. `--repair-spacing`은 선택적 띄어쓰기 보정이고, `--keep-line-breaks`로 기본 문단 복원을 끌 수 있습니다. `--keep-hanja`로 병기를 유지할 수 있습니다. 독립 한자 및 한글로 오인식된 한자까지 자동 삭제하지는 않습니다.
 
-`--engine qwen`으로 Qwen GPU 후보를, `--engine vl`로 PaddleOCR-VL을 시험할 수 있습니다. `--vl-lines`는 VLM을 기존 검출 영역별로 실행하는 비교 옵션입니다. 기본 PaddleOCR의 좌표는 문단 복원에 사용합니다. 좌표 없는 VLM 결과는 모델이 생성한 문단 형태를 보존합니다. 모호한 연결과 보정 제안은 페이지 JSON의 `restoration.reviews`에서 확인하며 모든 결과는 원문 대조가 필요합니다.
+`--engine qwen`으로 Qwen GPU 후보를, `--engine vl`로 PaddleOCR-VL 1.5를, `--engine vl16`으로 1.6을 시험할 수 있습니다. `--vl-lines`는 VLM을 기존 검출 영역별로 실행하는 비교 옵션입니다. 기본 PaddleOCR의 좌표는 문단 복원에 사용합니다. 좌표 없는 VLM 결과는 모델이 생성한 문단 형태를 보존합니다. 모호한 연결과 보정 제안은 페이지 JSON의 `restoration.reviews`에서 확인하며 모든 결과는 원문 대조가 필요합니다.
 
 설치·검사 명령은 [AGENTS.md](AGENTS.md), 모델 정보와 시험 한계는 [OCR 실행 기록](docs/OCR_SETUP.md)을 참조하세요.

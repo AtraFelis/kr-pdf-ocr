@@ -44,7 +44,9 @@ def main():
     parser.add_argument("--pages", default="1-2")
     parser.add_argument("--dpi", type=int, default=300)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--engine", choices=("paddle", "vl", "qwen"), default="paddle")
+    parser.add_argument(
+        "--engine", choices=("paddle", "vl", "vl16", "qwen"), default="paddle"
+    )
     parser.add_argument(
         "--keep-hanja", action="store_true", help="병기 한자를 삭제하지 않음"
     )
@@ -68,15 +70,17 @@ def main():
     socket.socket.connect = deny_connection
     socket.socket.connect_ex = deny_connection
     start = time.perf_counter()
-    if args.engine in ("vl", "qwen"):
+    if args.engine in ("vl", "vl16", "qwen"):
         from .vl_engine import LocalVLEngine
 
         engine = LocalVLEngine(
             ROOT,
             line_regions=args.vl_lines,
-            model_name="Qwen3-VL-2B-Instruct"
-            if args.engine == "qwen"
-            else "PaddleOCR-VL-1.5",
+            model_name={
+                "qwen": "Qwen3-VL-2B-Instruct",
+                "vl": "PaddleOCR-VL-1.5",
+                "vl16": "PaddleOCR-VL-1.6",
+            }[args.engine],
         )
     else:
         engine = LocalPaddleEngine(ROOT)
