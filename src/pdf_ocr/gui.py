@@ -134,7 +134,7 @@ class OCRWindow(QMainWindow):
         self.set_busy(False)
 
     def build_ui(self):
-        """페이지·영역·모델·장치·결과 패널을 만들고 사용자 동작을 연결한다."""
+        """패널과 사용자 동작을 구성하고 좌표 이름·입력칸을 한 쌍으로 배치한다."""
         body = QWidget()
         self.setCentralWidget(body)
         layout = QVBoxLayout(body)
@@ -255,11 +255,14 @@ class OCRWindow(QMainWindow):
         coordinates = QHBoxLayout()
         self.coordinates = []
         for label in ("왼쪽", "위쪽", "오른쪽", "아래쪽"):
-            coordinates.addWidget(QLabel(label))
+            coordinate_pair = QHBoxLayout()
+            coordinate_pair.addWidget(QLabel(label))
             field = QSpinBox()
             field.setRange(0, 100000)
             self.coordinates.append(field)
-            coordinates.addWidget(field)
+            # 여분의 폭은 입력칸에 배분해 이름과 입력칸 사이가 벌어지지 않는다.
+            coordinate_pair.addWidget(field, 1)
+            coordinates.addLayout(coordinate_pair, 1)
         middle.addLayout(coordinates)
         apply = QHBoxLayout()
         self.scope = QComboBox()

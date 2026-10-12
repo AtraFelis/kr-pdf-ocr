@@ -9,7 +9,7 @@ from PIL import Image
 from pypdf import PdfWriter
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QSplitter
 
 from pdf_ocr.gui import OCRWindow, configure_application
 from pdf_ocr.preview import PagePreview
@@ -46,6 +46,36 @@ def pdf(tmp_path):
     writer.add_blank_page(width=450, height=300)
     writer.write(path)
     return path
+
+
+def test_coordinate_labels_stay_next_to_fields_when_widened(window, application):
+    """창과 미리보기 폭을 늘려도 각 좌표 이름과 입력칸 사이 간격을 유지한다."""
+    labels = {
+        label.text(): label
+        for label in window.findChildren(QLabel)
+        if label.text() in ("왼쪽", "위쪽", "오른쪽", "아래쪽")
+    }
+    splitter = window.findChild(QSplitter)
+    gaps = []
+    widths = []
+    for width in (1380, 2200):
+        window.resize(width, 880)
+        splitter.setSizes([240, width - 640, 400])
+        application.processEvents()
+        current_gaps = []
+        for name, field in zip(
+            ("왼쪽", "위쪽", "오른쪽", "아래쪽"), window.coordinates, strict=True
+        ):
+            label = labels[name]
+            gap = field.mapToGlobal(QPoint()).x() - (
+                label.mapToGlobal(QPoint()).x() + label.width()
+            )
+            assert 0 <= gap <= 12
+            current_gaps.append(gap)
+        gaps.append(current_gaps)
+        widths.append(window.coordinates[0].width())
+    assert gaps[0] == gaps[1]
+    assert widths[1] > widths[0]
 
 
 @pytest.mark.parametrize("zoom", [0.5, 1, 1.5])
