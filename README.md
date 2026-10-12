@@ -1,6 +1,6 @@
-# 한국어 PDF OCR 및 TXT 변환
+# 한국어 PDF OCR 및 TXT·Markdown 추출
 
-Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영역 선택과 문단 복원을 거쳐 TXT로 저장하는 프로젝트입니다. 프로그램 이름은 아직 확정하지 않았습니다.
+Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영역 선택과 문단 복원을 거쳐 TXT로 저장하는 프로젝트입니다. 복잡한 문서용 Markdown 출력도 개발할 계획입니다. 프로그램 이름은 아직 확정하지 않았습니다.
 
 ## 문서
 
@@ -8,8 +8,11 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영�
 - [개발 목록](docs/TASKS.md)
 - [문서 분류와 저장 위치](docs/README.md)
 - [Git 컨벤션](docs/rules/GIT_CONVENTIONS.md)
+- [코딩 컨벤션·Docstring](docs/rules/CODING_CONVENTIONS.md)
 - [GitHub 저장소 설명](docs/GITHUB_DESCRIPTION.md)
 - [문단 복원](docs/TEXT_RESTORATION.md)
+- [고유명사 사용자 사전 설계·개발 예정](docs/USER_DICTIONARY.md)
+- [모델 안내·Markdown 출력 설계](docs/MODEL_AND_EXPORT.md)
 - [OCR 모델 선택 기록](docs/history/MODEL_SELECTION.md)
 - [OCR 실행 기록](docs/history/OCR_SETUP.md)
 - [기능 구현·검증 기록](docs/history/IMPLEMENTATION_LOG.md)
@@ -32,6 +35,10 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영�
 Python 3.12 프로젝트 가상환경과 PaddleOCR CPU 시험 코드가 준비되어 있습니다. 샘플 1~2페이지를 300 DPI로 인식해 페이지별 TXT, 좌표·신뢰도 JSON, 페이지 이미지와 실행 요약을 저장했습니다.
 
 PaddleOCR CPU와 PaddleOCR-VL·Qwen GPU 후보를 비교했습니다. 최종 모델은 아직 확정하지 않았습니다. 한국어·영어를 우선하고 명확한 한자 병기는 기본적으로 제외하며 원시 결과를 별도로 보존합니다. 단일 본문 문단 복원·선택적 로컬 띄어쓰기 보정·데스크톱 화면이 구현되어 있으며 페이지 간 연결·배포본은 후속 작업입니다.
+
+다음 개발은 고유명사 사용자 사전입니다. 단어 사전을 만들어 Kiwi 띄어쓰기 보정에 반영하고, 저장 OCR 결과로 적용 전후를 비교하는 기능을 계획했습니다. 현재는 문서에 반영한 기획 단계이며 사전 관리 화면·실행 옵션은 아직 없습니다.
+
+텍스트 중심 문서는 PP-OCRv5 + TXT를 기본 흐름으로 삼습니다. 표·차트·수식·다단 구조가 있는 문서는 VL 1.6의 공식 문서 파이프라인과 Markdown 출력을 추가할 계획입니다. 모델 정보 아이콘을 클릭해 권장 문서·출력 형식·현재 지원 범위를 보는 기능도 개발 예정입니다.
 
 ## 실행 방법
 

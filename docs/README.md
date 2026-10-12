@@ -11,6 +11,8 @@
 - [데스크톱 사용법](DESKTOP_APP.md)
 - [페이지·영역 선택](PAGE_SELECTION.md)
 - [문단 복원·띄어쓰기 보정](TEXT_RESTORATION.md)
+- [고유명사 사용자 사전 설계·개발 예정](USER_DICTIONARY.md)
+- [모델 안내·출력 형식 설계](MODEL_AND_EXPORT.md)
 - [GitHub 저장소 설명](GITHUB_DESCRIPTION.md)
 
 ## 개발 규칙
@@ -18,6 +20,7 @@
 `docs/rules/`에는 코딩 컨벤션, Git 작업 규칙, 개발 절차처럼 개발 중 지켜야 하는 규칙을 둔다.
 
 - [Git 컨벤션](rules/GIT_CONVENTIONS.md)
+- [코딩 컨벤션·Docstring](rules/CODING_CONVENTIONS.md)
 - 프로젝트 전체의 코딩 컨벤션·금지 사항·검증 기준은 루트 [AGENTS.md](../AGENTS.md)에 정의한다.
 
 ## 개발 기록
@@ -27,5 +30,7 @@
 - [OCR 실행 환경·샘플 시험 기록](history/OCR_SETUP.md)
 - [OCR 모델 선택 기록](history/MODEL_SELECTION.md)
 - [기능 구현·검증 기록](history/IMPLEMENTATION_LOG.md)
+- [고유명사 사용자 사전 도입 결정](history/USER_DICTIONARY_DECISION.md)
+- [작업 완료 PR·Docstring 규칙 적용](history/DOCSTRING_RULES.md)
 
 기능 사용법에는 현재 동작과 제한을 설명하고, 과거 실행 결과는 기록 문서로 연결한다. 기록을 작성할 때 실행 조건과 실제 확인 범위를 적는다. 실제 PDF·OCR 결과·로그는 기존 추적 제외 폴더에 보관한다. 문서를 이동하면 README·AGENTS.md와 문서 사이의 상대 링크도 함께 수정한다.

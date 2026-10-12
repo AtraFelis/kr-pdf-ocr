@@ -12,6 +12,7 @@ MODELS = ("PP-OCRv5_mobile_det", "korean_PP-OCRv5_mobile_rec")
 
 
 def main():
+    """공식 검출·한국어 모델을 로컬에 준비하고 출처와 받은 아카이브 해시를 기록한다."""
     destination = ROOT / "models"
     destination.mkdir(exist_ok=True)
     records = []

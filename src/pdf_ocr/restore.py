@@ -8,6 +8,7 @@ from .paragraphs import restore_paragraphs
 
 
 def main():
+    """모델 재실행 없이 저장 OCR JSON의 문단·공백을 재처리해 새 출력 경로에 쓴다."""
     parser = argparse.ArgumentParser(description="저장된 OCR 결과의 문단 복원")
     parser.add_argument("input", type=Path)
     parser.add_argument("--output", type=Path, required=True)
