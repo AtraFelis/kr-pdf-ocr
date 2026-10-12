@@ -6,16 +6,22 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영�
 
 - [기획서](docs/PLAN.md)
 - [개발 목록](docs/TASKS.md)
-- [Git 컨벤션](docs/GIT_CONVENTIONS.md)
+- [문서 분류와 저장 위치](docs/README.md)
+- [Git 컨벤션](docs/rules/GIT_CONVENTIONS.md)
 - [GitHub 저장소 설명](docs/GITHUB_DESCRIPTION.md)
 - [문단 복원](docs/TEXT_RESTORATION.md)
-- [OCR 모델 선택 기준](docs/MODEL_SELECTION.md)
+- [OCR 모델 선택 기록](docs/history/MODEL_SELECTION.md)
+- [OCR 실행 기록](docs/history/OCR_SETUP.md)
+- [기능 구현·검증 기록](docs/history/IMPLEMENTATION_LOG.md)
 - [페이지·영역 선택](docs/PAGE_SELECTION.md)
 - [데스크톱 사용법](docs/DESKTOP_APP.md)
 
 ## 폴더
 
 - `src/`: 프로그램 소스
+- `docs/`: 기획·개발 목록·기능 사용법
+- `docs/rules/`: 코딩·Git·개발 절차 규칙
+- `docs/history/`: 개발 결정·실행·검증 기록
 - `models/`: 로컬 OCR 모델
 - `samples/input/`: 실제 PDF 샘플
 - `samples/expected/`: 샘플에 대응하는 정답 TXT
@@ -45,4 +51,4 @@ PaddleOCR CPU와 PaddleOCR-VL·Qwen GPU 후보를 비교했습니다. 최종 모
 
 `--engine qwen`으로 Qwen GPU 후보를, `--engine vl`로 PaddleOCR-VL 1.5를, `--engine vl16`으로 1.6을 시험할 수 있습니다. `--vl-lines`는 VLM을 기존 검출 영역별로 실행하는 비교 옵션입니다. 기본 PaddleOCR의 좌표는 문단 복원에 사용합니다. 좌표 없는 VLM 결과는 모델이 생성한 문단 형태를 보존합니다. 모호한 연결과 보정 제안은 페이지 JSON의 `restoration.reviews`에서 확인하며 모든 결과는 원문 대조가 필요합니다.
 
-설치·검사 명령은 [AGENTS.md](AGENTS.md), 모델 정보와 시험 한계는 [OCR 실행 기록](docs/OCR_SETUP.md)을 참조하세요.
+설치·검사 명령은 [AGENTS.md](AGENTS.md), 모델 정보와 시험 한계는 [OCR 실행 기록](docs/history/OCR_SETUP.md)을 참조하세요.
