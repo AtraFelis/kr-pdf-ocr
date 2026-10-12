@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 from .devices import ocr_python
 from .dictionary import load_dictionary, save_dictionary
 from .dictionary_ui import ComparisonDialog, DictionaryDialog
+from .model_info import MODEL_GUIDES, ModelInfoDialog
 from .pdf import page_count, render_pages
 from .preview import PagePreview
 from .selection import Region, select_pages
@@ -185,10 +186,19 @@ class OCRWindow(QMainWindow):
         side.addWidget(self.page_list, 1)
         side.addWidget(QLabel("인식 모델"))
         self.model = QComboBox()
-        self.model.addItem("PP-OCRv5 한국어", "paddle")
-        self.model.addItem("PaddleOCR-VL 1.6", "vl16")
-        self.model.addItem("Qwen3-VL 2B", "qwen")
-        side.addWidget(self.model)
+        for engine, guide in MODEL_GUIDES.items():
+            self.model.addItem(guide["name"], engine)
+        model_row = QHBoxLayout()
+        model_row.addWidget(self.model, 1)
+        self.model_info_button = QPushButton("ⓘ")
+        self.model_info_button.setAccessibleName("모델 설명")
+        self.model_info_button.setToolTip(
+            "선택 모델의 권장 문서·출력 형식과 현재 지원 범위"
+        )
+        self.model_info_button.setFixedWidth(36)
+        self.model_info_button.clicked.connect(self.show_model_info)
+        model_row.addWidget(self.model_info_button)
+        side.addLayout(model_row)
         side.addWidget(QLabel("처리 장치"))
         self.device = QComboBox()
         self.device.addItem("CPU", "cpu")
@@ -420,6 +430,18 @@ class OCRWindow(QMainWindow):
                 "실행할 수 없다면 오류 안내를 확인하거나 CPU로 바꿔 주세요."
             )
         self.device_notice.setText(text)
+
+    def show_model_info(self):
+        """선택 모델 설명을 클릭·키보드로 열고 닫은 뒤 정보 버튼에 초점을 돌린다."""
+        try:
+            dialog = ModelInfoDialog(
+                self.model.currentData(), self.device.currentData(), self
+            )
+            dialog.exec()
+        except ValueError as error:
+            QMessageBox.warning(self, "모델 설명", str(error))
+        finally:
+            self.model_info_button.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def confirm_discard(self):
         """수정 내용이 없거나 사용자가 저장하지 않은 편집 내용 폐기를 허용하면 True를 반환한다."""
