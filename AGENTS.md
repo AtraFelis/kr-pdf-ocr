@@ -39,13 +39,17 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine vl --output "output/vl-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 한국어 품질 비교 후보 Qwen
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine qwen --output "output/qwen-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 문단 복원과 선택적 한국어 띄어쓰기 보정
+.\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --repair-spacing --output "output/restored-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 저장된 OCR JSON 재처리(모델 재실행 없음)
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02/page-001.json --repair-spacing --output "output/reprocessed-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 검증
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check src scripts tests
 .\.venv\Scripts\python.exe -m ruff format --check src scripts tests
 ```
 
-이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 문단 복원 후처리·GUI·배포 빌드는 아직 미구현이다.
+이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원과 선택적 Kiwi 띄어쓰기 보정이 구현되어 있다. GUI·페이지 간 연결·배포 빌드는 아직 미구현이다.
 
 - 도구를 도입하는 변경에서 실제 확인한 설치·실행·테스트·정적 검사·포맷 검사·빌드 명령을 이 절에 등록한다. 작업 디렉터리와 실행 전제조건을 명시하고 복사해 실행 가능한 형태로 작성한다.
 - 명령·구조·의존성이 바뀌면 AGENTS.md도 같은 변경에서 갱신한다. 오래된 지침과 중복 규칙을 제거한다.
@@ -62,6 +66,7 @@ python -m venv .venv
 - OCR은 화면을 멈추지 않도록 실행하며 취소·오류 시 완료 결과를 보존한다. TXT는 UTF-8로 저장한다.
 - 모델 버전·라이선스·실행 조건을 기록한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.
+- 기본 문단 복원은 단일 본문 영역만 처리한다. 좌표가 없거나 같은 높이에 영역이 겹치면 줄바꿈을 보존하고 확인 대상으로 남긴다. `--keep-line-breaks`로 복원을 끌 수 있다. `--repair-spacing`은 Kiwi 로컬 모델을 사용하는 선택 기능이며 공백을 제외한 글자가 변경되면 적용을 중단한다. 변경 제안과 모호한 연결은 JSON에 기록한다.
 - 커밋과 PR은 하나의 변경 목적을 중심으로 구성하고 변경 이유와 검증 결과를 적는다.
 - Git 작업은 [Git 컨벤션](docs/GIT_CONVENTIONS.md)을 따른다. 기본 브랜치는 `main`, 작업 브랜치는 `codex/<작업명>`이며 커밋은 `<type>(<scope>): <한국어 설명>` 형식을 사용한다. 관련 파일만 추가하고 커밋 전 스테이징 내용·제외 대상·검증 결과를 확인한다.
 

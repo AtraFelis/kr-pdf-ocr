@@ -26,6 +26,8 @@ idna==3.20
 imagesize==2.0.1
 iniconfig==2.3.1
 Jinja2==3.1.6
+kiwipiepy==0.24.0
+kiwipiepy_model==0.24.0
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 mdurl==0.1.2

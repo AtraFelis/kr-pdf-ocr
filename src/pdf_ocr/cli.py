@@ -1,4 +1,4 @@
-"""OCR experiment: preserve original line breaks for model evaluation."""
+"""Local OCR with original results and conservative paragraph restoration."""
 
 import argparse
 import json
@@ -9,6 +9,7 @@ from pathlib import Path
 import psutil
 
 from .engine import LocalPaddleEngine
+from .paragraphs import restore_paragraphs
 from .pdf import render_pages
 from .text import remove_hanja_annotations
 
@@ -50,8 +51,16 @@ def main():
     parser.add_argument(
         "--vl-lines", action="store_true", help="VLM을 검출 줄 영역별로 실행"
     )
+    parser.add_argument(
+        "--keep-line-breaks", action="store_true", help="문단 복원을 적용하지 않음"
+    )
+    parser.add_argument(
+        "--repair-spacing", action="store_true", help="로컬 Kiwi로 띄어쓰기 보정 제안"
+    )
     args = parser.parse_args()
     pages = parse_pages(args.pages)
+    if args.keep_line_breaks and args.repair_spacing:
+        parser.error("띄어쓰기 보정은 문단 복원과 함께 사용하세요.")
     if not args.pdf.is_file() or args.dpi < 72:
         parser.error("PDF 파일 경로와 DPI(72 이상)를 확인하세요.")
     # Unique output directories protect previous results and user edits.
@@ -72,11 +81,23 @@ def main():
     else:
         engine = LocalPaddleEngine(ROOT)
     initialization = time.perf_counter() - start
+    spacing = None
+    if args.repair_spacing:
+        from .spacing import LocalSpacingRepair
+
+        spacing = LocalSpacingRepair()
     records = []
     try:
         for number, image in render_pages(args.pdf, pages, args.dpi):
             started = time.perf_counter()
             lines = engine.recognize(image)
+            restored = (
+                None
+                if args.keep_line_breaks
+                else restore_paragraphs(lines, not args.keep_hanja)
+            )
+            if spacing is not None:
+                restored = spacing.repair(restored)
             record = {
                 "page": number,
                 "width": image.width,
@@ -84,6 +105,7 @@ def main():
                 "seconds": time.perf_counter() - started,
                 "rss_bytes": psutil.Process().memory_info().rss,
                 "lines": lines,
+                "restoration": restored,
             }
             image.save(args.output / f"page-{number:03}.png")
             (args.output / f"page-{number:03}.json").write_text(
@@ -94,6 +116,8 @@ def main():
                 raw, encoding="utf-8"
             )
             cleaned = raw if args.keep_hanja else remove_hanja_annotations(raw)
+            if restored is not None:
+                cleaned = restored["text"] + "\n"
             (args.output / f"page-{number:03}.txt").write_text(
                 cleaned, encoding="utf-8"
             )
@@ -114,7 +138,8 @@ def main():
                     "dpi": args.dpi,
                     "initialization_seconds": initialization,
                     "network_connections_blocked": True,
-                    "paragraph_restoration": False,
+                    "paragraph_restoration": not args.keep_line_breaks,
+                    "spacing_repair": args.repair_spacing,
                     "completed_pages": records,
                 },
                 ensure_ascii=False,
