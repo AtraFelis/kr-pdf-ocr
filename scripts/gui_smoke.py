@@ -15,6 +15,7 @@ from pdf_ocr.selection import Region
 
 
 def main():
+    """첫 페이지의 선택 영역을 실제 GUI OCR로 처리하고 화면·저장 결과·실행 기록을 남긴다."""
     parser = argparse.ArgumentParser()
     parser.add_argument("pdf", type=Path)
     parser.add_argument(

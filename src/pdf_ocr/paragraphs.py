@@ -41,6 +41,19 @@ def join_lines(previous: str, following: str):
 
 
 def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
+    """OCR 줄 좌표로 단일 본문 문단을 복원하고 모호한 연결을 기록한다.
+
+    Args:
+        lines: text와 선택적 픽셀 polygon을 포함한 원시 줄 목록.
+        exclude_hanja: 명확한 한국어 병기 한자를 최종 텍스트에서 제외할지 여부.
+
+    Returns:
+        text, paragraphs, reviews와 좌표 복원 여부 geometry_applied를 담은 사전.
+        좌표가 없거나 영역이 겹치면 기존 줄 순서·형태를 보존한다.
+
+    Raises:
+        ValueError: 제공된 OCR 영역의 너비나 높이가 유효하지 않은 경우.
+    """
     reviews = []
     entries = []
     for index, line in enumerate(lines):

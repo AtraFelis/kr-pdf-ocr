@@ -8,6 +8,7 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영�
 - [개발 목록](docs/TASKS.md)
 - [문서 분류와 저장 위치](docs/README.md)
 - [Git 컨벤션](docs/rules/GIT_CONVENTIONS.md)
+- [코딩 컨벤션·Docstring](docs/rules/CODING_CONVENTIONS.md)
 - [GitHub 저장소 설명](docs/GITHUB_DESCRIPTION.md)
 - [문단 복원](docs/TEXT_RESTORATION.md)
 - [고유명사 사용자 사전 설계·개발 예정](docs/USER_DICTIONARY.md)

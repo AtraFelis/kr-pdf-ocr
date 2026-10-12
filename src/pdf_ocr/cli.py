@@ -25,10 +25,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def deny_connection(*args, **kwargs):
+    """문서 처리 중 소켓 연결을 거부하고 RuntimeError를 발생시킨다."""
     raise RuntimeError("문서 처리 중 네트워크 연결은 차단됩니다.")
 
 
 def main():
+    """선택 페이지·영역을 로컬 OCR하고 원시 결과·복원 TXT·실행 기록을 저장한다."""
     parser = argparse.ArgumentParser(description="로컬 PDF OCR 모델 시험")
     parser.add_argument("pdf", type=Path)
     parser.add_argument("--pages", default="all", help="all 또는 1,3,5-7")

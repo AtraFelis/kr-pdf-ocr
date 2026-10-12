@@ -1,3 +1,5 @@
+"""로컬 PP-OCRv5 모델로 줄별 글자·신뢰도·입력 이미지 좌표를 인식한다."""
+
 import os
 from pathlib import Path
 
@@ -5,7 +7,10 @@ from .devices import resolve_device
 
 
 class LocalPaddleEngine:
+    """공식 로컬 검출·한국어 인식 모델을 CPU 또는 GPU에서 실행한다."""
+
     def __init__(self, root: Path, device="cpu"):
+        """모델 파일과 요청 장치를 확인하고 다운로드 없이 OCR 엔진을 초기화한다."""
         for name in ("PP-OCRv5_mobile_det", "korean_PP-OCRv5_mobile_rec"):
             for filename in ("inference.yml", "inference.json", "inference.pdiparams"):
                 path = root / "models" / f"{name}_infer" / filename
@@ -39,6 +44,7 @@ class LocalPaddleEngine:
         )
 
     def recognize(self, image):
+        """입력 PIL 이미지의 줄별 텍스트·모델 신뢰도·픽셀 다각형을 반환한다."""
         import numpy as np
 
         result = next(

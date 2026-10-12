@@ -48,6 +48,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def configure_application(app):
+    """밝은 팔레트와 설치된 한글 글꼴을 등록해 OS 테마와 일관된 화면을 구성한다."""
     app.setStyle("Fusion")
     # Fusion still inherits Windows colors. Keep the app's light backgrounds
     # and control/text colors in the same scheme, including inactive windows.
@@ -101,7 +102,10 @@ def configure_application(app):
 
 
 class OCRWindow(QMainWindow):
+    """PDF 선택·미리보기·OCR 프로세스·텍스트 편집과 안전한 저장을 관리한다."""
+
     def __init__(self, root=ROOT):
+        """작업 상태와 창을 만들고 소유한 OCR 프로세스의 출력·종료 신호를 연결한다."""
         super().__init__()
         self.root = Path(root)
         self.pdf_path = None
@@ -126,6 +130,7 @@ class OCRWindow(QMainWindow):
         self.set_busy(False)
 
     def build_ui(self):
+        """페이지·영역·모델·장치·결과 패널을 만들고 사용자 동작을 연결한다."""
         body = QWidget()
         self.setCentralWidget(body)
         layout = QVBoxLayout(body)
@@ -291,9 +296,11 @@ class OCRWindow(QMainWindow):
         )
 
     def running(self):
+        """이 창이 소유한 OCR 프로세스가 시작 또는 실행 중인지 반환한다."""
         return self.process.state() != QProcess.ProcessState.NotRunning
 
     def set_busy(self, busy):
+        """OCR 진행 여부와 PDF·미리보기 상태에 맞춰 조작 가능한 항목을 갱신한다."""
         editable_region = (
             not busy and self.pdf_path is not None and not self.preview.pixmap.isNull()
         )
@@ -310,11 +317,13 @@ class OCRWindow(QMainWindow):
         self.save_button.setEnabled(not busy and bool(self.editor.toPlainText()))
 
     def update_save_button(self):
+        """OCR이 멈춰 있고 편집기에 내용이 있을 때만 저장 버튼을 활성화한다."""
         self.save_button.setEnabled(
             not self.running() and bool(self.editor.toPlainText())
         )
 
     def update_spacing_option(self):
+        """선택 모델에 맞춰 Kiwi 보정 사용 가능 여부와 안내를 갱신한다."""
         self.repair.setEnabled(self.model.currentData() == "paddle")
         self.repair.setToolTip(
             "기본 모델의 결과에서 공백만 보정합니다. 고유명사 등은 원문 확인이 필요합니다."
@@ -323,6 +332,7 @@ class OCRWindow(QMainWindow):
         )
 
     def update_device_notice(self):
+        """선택 장치와 모델에 따라 CPU 자원 또는 GPU 실행 환경 안내를 표시한다."""
         if self.device.currentData() == "cpu":
             text = (
                 "CPU 사용 안내\nGPU보다 처리가 오래 걸릴 수 있으며, "
@@ -339,6 +349,7 @@ class OCRWindow(QMainWindow):
         self.device_notice.setText(text)
 
     def confirm_discard(self):
+        """수정 내용이 없거나 사용자가 저장하지 않은 편집 내용 폐기를 허용하면 True를 반환한다."""
         if not self.editor.document().isModified():
             return True
         return (
@@ -353,11 +364,13 @@ class OCRWindow(QMainWindow):
         )
 
     def choose_pdf(self):
+        """파일 선택 창에서 고른 PDF를 기존 편집 보호 절차를 거쳐 연다."""
         path, _ = QFileDialog.getOpenFileName(self, "PDF 열기", "", "PDF 파일 (*.pdf)")
         if path:
             self.load_pdf(Path(path))
 
     def load_pdf(self, path):
+        """PDF를 검사하고 페이지를 채우며 열기 실패·폐기 거부 시 기존 문서를 유지한다."""
         if self.running() or not self.confirm_discard():
             return False
         try:
@@ -390,6 +403,7 @@ class OCRWindow(QMainWindow):
         return True
 
     def checked_pages(self):
+        """현재 체크한 PDF 페이지 번호를 1부터 시작하는 목록으로 반환한다."""
         return [
             index + 1
             for index in range(self.total)
@@ -397,11 +411,13 @@ class OCRWindow(QMainWindow):
         ]
 
     def page_checks_changed(self, item):
+        """사용자가 바꾼 페이지 체크 상태를 범위 입력란에 반영한다."""
         if not self.updating_pages:
             self.pages_field.setText(",".join(map(str, self.checked_pages())))
             self.exclude_field.clear()
 
     def apply_page_fields(self):
+        """범위·제외 입력을 검사해 체크 상태에 반영하고 성공 여부를 반환한다."""
         if self.pdf_path is None:
             return False
         try:
@@ -422,6 +438,7 @@ class OCRWindow(QMainWindow):
         return True
 
     def show_page(self, index):
+        """목록의 0 기반 행을 PDF 페이지로 변환해 미리보기와 저장된 선택 영역을 표시한다."""
         if self.pdf_path is None or index < 0:
             return
         self.preview.clear_image()
@@ -443,6 +460,7 @@ class OCRWindow(QMainWindow):
         self.set_busy(self.running())
 
     def set_current_region(self, region):
+        """상대 영역을 미리보기와 기준 이미지의 픽셀 좌표 입력란에 반영한다."""
         self.preview.set_region(region)
         width, height = self.preview_size
         for field, limit, value in zip(
@@ -455,11 +473,13 @@ class OCRWindow(QMainWindow):
             field.setValue(round(limit * value))
 
     def selection_changed(self, region):
+        """마우스로 선택한 상대 영역을 현재 페이지에 저장하고 입력란을 맞춘다."""
         number = self.page_list.currentRow() + 1
         self.regions[number] = region
         self.set_current_region(region)
 
     def apply_region(self, region=None):
+        """숫자 또는 전달받은 영역을 현재·체크·전체 페이지 범위에 적용한다."""
         if self.pdf_path is None:
             return
         # QPushButton.clicked passes a bool; it is not a region.
@@ -489,6 +509,7 @@ class OCRWindow(QMainWindow):
         self.status.setText(f"{len(pages)}개 페이지에 영역을 적용했습니다.")
 
     def start_ocr(self):
+        """선택과 편집 폐기를 확인하고 새 작업 폴더에서 모델·장치별 OCR을 시작한다."""
         if (
             self.running()
             or self.pdf_path is None
@@ -547,6 +568,7 @@ class OCRWindow(QMainWindow):
         self.process.start(ocr_python(self.root, self.model.currentData()), args)
 
     def read_process_output(self):
+        """프로세스 출력을 누적하고 실제 완료 페이지로 진행률을 갱신한다."""
         self.log_buffer += bytes(self.process.readAllStandardOutput()).decode(
             "utf-8", errors="replace"
         )
@@ -560,6 +582,7 @@ class OCRWindow(QMainWindow):
             )
 
     def cancel_ocr(self):
+        """소유한 OCR 프로세스에 종료를 요청하고 제한 시간 뒤 강제 종료를 예약한다."""
         if not self.running():
             return
         self.cancelled = True
@@ -568,10 +591,12 @@ class OCRWindow(QMainWindow):
         QTimer.singleShot(2000, self.kill_if_running)
 
     def kill_if_running(self):
+        """취소 요청 뒤 아직 실행 중인 이 창의 프로세스만 강제 종료한다."""
         if self.cancelled and self.running():
             self.process.kill()
 
     def process_error(self, error):
+        """프로세스를 시작하지 못한 경우 조작 상태를 복원하고 실행 환경 안내를 표시한다."""
         if error == QProcess.ProcessError.FailedToStart:
             self.set_busy(False)
             self.status.setText("OCR 실행 환경을 시작하지 못했습니다.")
@@ -582,6 +607,7 @@ class OCRWindow(QMainWindow):
             )
 
     def process_finished(self, code, status):
+        """완료된 결과·로그를 복구하고 정상 완료·취소·실패 상태를 구분해 표시한다."""
         self.read_process_output()
         if self.run_folder is not None:
             try:
@@ -621,6 +647,17 @@ class OCRWindow(QMainWindow):
             self.close()
 
     def save_result(self, path, overwrite=False):
+        """편집 결과를 원본과 다른 TXT 경로에 UTF-8로 원자적으로 저장한다.
+
+        Args:
+            path: 사용자가 선택한 TXT 출력 경로.
+            overwrite: 기존 파일 덮어쓰기가 이미 승인되었는지 여부.
+
+        Raises:
+            ValueError: TXT가 아니거나 원본 PDF와 같은 경로인 경우.
+            FileExistsError: 확인 없이 기존 파일에 쓰려는 경우.
+            OSError: 파일을 열거나 쓰거나 원자적 저장을 완료하지 못한 경우.
+        """
         path = Path(path)
         if path.suffix.lower() != ".txt" or (
             self.pdf_path and path.resolve() == self.pdf_path
@@ -638,6 +675,7 @@ class OCRWindow(QMainWindow):
         self.status.setText(f"저장 완료 · {path.name}")
 
     def choose_save(self):
+        """TXT 경로와 덮어쓰기 승인을 받아 저장하고 파일 오류를 사용자에게 알린다."""
         default = (
             self.pdf_path.with_suffix(".txt") if self.pdf_path else Path("result.txt")
         )
@@ -671,6 +709,7 @@ class OCRWindow(QMainWindow):
             QMessageBox.warning(self, "저장 실패", str(error))
 
     def dragEnterEvent(self, event):
+        """OCR이 실행 중이지 않을 때 로컬 PDF가 포함된 드래그를 허용한다."""
         if (
             not self.running()
             and event.mimeData().hasUrls()
@@ -682,12 +721,14 @@ class OCRWindow(QMainWindow):
             event.acceptProposedAction()
 
     def dropEvent(self, event):
+        """드롭된 로컬 파일 중 첫 PDF를 기존 편집 보호 절차로 연다."""
         for url in event.mimeData().urls():
             if url.isLocalFile() and url.toLocalFile().lower().endswith(".pdf"):
                 self.load_pdf(Path(url.toLocalFile()))
                 break
 
     def closeEvent(self, event):
+        """진행 작업 취소와 저장하지 않은 편집 내용 처리 승인을 받은 뒤 창을 닫는다."""
         if self.running():
             if (
                 QMessageBox.question(
@@ -709,6 +750,7 @@ class OCRWindow(QMainWindow):
 
 
 def main():
+    """옵션 PDF를 열고 로컬 OCR 데스크톱 화면의 이벤트 루프를 실행한다."""
     parser = argparse.ArgumentParser(description="한국어 PDF OCR 데스크톱 화면")
     parser.add_argument("pdf", nargs="?", type=Path)
     args = parser.parse_args()

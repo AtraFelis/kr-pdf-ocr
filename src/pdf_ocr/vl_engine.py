@@ -1,3 +1,5 @@
+"""로컬 시각·언어 모델로 페이지 또는 검출 영역의 글자를 추출한다."""
+
 import os
 from pathlib import Path
 
@@ -14,6 +16,7 @@ class LocalVLEngine:
         model_name="PaddleOCR-VL-1.5",
         device="auto",
     ):
+        """로컬 VLM·명시적 장치와 선택적 CPU 줄 검출기를 원격 코드 없이 초기화한다."""
         directory = root / "models" / model_name
         if not (directory / "config.json").is_file():
             raise FileNotFoundError(f"로컬 VLM이 없습니다: {directory}")
@@ -54,6 +57,7 @@ class LocalVLEngine:
             self.detector = LocalPaddleEngine(root)
 
     def recognize(self, image):
+        """페이지 전체 또는 실제 검출 영역별 텍스트를 읽고 제공되지 않은 신뢰도는 비운다."""
         if self.detector is None:
             return [self.recognize_region(image, 2048)]
         results = []
@@ -76,6 +80,7 @@ class LocalVLEngine:
         return results
 
     def recognize_region(self, image, token_limit):
+        """입력 이미지에서 토큰 상한 내 텍스트를 생성하고 좌표·신뢰도 없이 검토 대상으로 반환한다."""
         messages = [
             {
                 "role": "user",

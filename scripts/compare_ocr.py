@@ -1,3 +1,5 @@
+"""정답 TXT와 OCR 결과의 문자·공백 오류 지표를 비교한다."""
+
 import argparse
 import json
 from pathlib import Path
@@ -7,6 +9,7 @@ from pdf_ocr.text import remove_hanja_annotations
 
 
 def main():
+    """선택한 정답·결과 TXT를 같은 한자 처리 조건에서 비교해 지표 JSON을 출력한다."""
     parser = argparse.ArgumentParser(description="정답 TXT와 OCR 결과 비교")
     parser.add_argument("reference", type=Path)
     parser.add_argument("results", type=Path, nargs="+")

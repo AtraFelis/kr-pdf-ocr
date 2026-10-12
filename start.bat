@@ -1,4 +1,5 @@
 @echo off
+rem Launch the local PDF OCR desktop app from the project's Python environment.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\pythonw.exe" (
     echo Python environment is missing. See README.md for setup.

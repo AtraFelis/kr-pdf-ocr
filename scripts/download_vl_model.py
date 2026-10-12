@@ -12,6 +12,7 @@ from huggingface_hub import HfApi, snapshot_download
 
 
 def main():
+    """선택한 공식 VLM의 리비전을 고정해 다운로드하고 모델 출처·리비전을 기록한다."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model", choices=("paddle", "paddle16", "qwen"), default="paddle"
