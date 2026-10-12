@@ -499,6 +499,7 @@ class OCRWindow(QMainWindow):
         except ValueError as error:
             QMessageBox.warning(self, "모델 설명", str(error))
         finally:
+            self.activateWindow()
             self.model_info_button.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def confirm_discard(self):
