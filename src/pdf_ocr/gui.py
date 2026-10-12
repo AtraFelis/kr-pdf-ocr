@@ -16,7 +16,7 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
 )
-from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -48,6 +48,45 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def configure_application(app):
     app.setStyle("Fusion")
+    # Fusion still inherits Windows colors. Keep the app's light backgrounds
+    # and control/text colors in the same scheme, including inactive windows.
+    app.styleHints().setColorScheme(Qt.ColorScheme.Light)
+    palette = app.style().standardPalette()
+    colors = {
+        QPalette.ColorRole.Window: "#f6f8fc",
+        QPalette.ColorRole.WindowText: "#1e293b",
+        QPalette.ColorRole.Base: "#ffffff",
+        QPalette.ColorRole.AlternateBase: "#edf1f7",
+        QPalette.ColorRole.Text: "#1e293b",
+        QPalette.ColorRole.Button: "#eef2f8",
+        QPalette.ColorRole.ButtonText: "#1e293b",
+        QPalette.ColorRole.BrightText: "#ffffff",
+        QPalette.ColorRole.PlaceholderText: "#64748b",
+        QPalette.ColorRole.Highlight: "#315ceb",
+        QPalette.ColorRole.HighlightedText: "#ffffff",
+        QPalette.ColorRole.Accent: "#315ceb",
+        QPalette.ColorRole.Link: "#315ceb",
+        QPalette.ColorRole.LinkVisited: "#6941a5",
+        QPalette.ColorRole.ToolTipBase: "#ffffff",
+        QPalette.ColorRole.ToolTipText: "#1e293b",
+        QPalette.ColorRole.Light: "#ffffff",
+        QPalette.ColorRole.Midlight: "#eef2f8",
+        QPalette.ColorRole.Mid: "#cbd5e1",
+        QPalette.ColorRole.Dark: "#94a3b8",
+        QPalette.ColorRole.Shadow: "#64748b",
+    }
+    for role, color in colors.items():
+        palette.setColor(role, QColor(color))
+    for role in (
+        QPalette.ColorRole.WindowText,
+        QPalette.ColorRole.Text,
+        QPalette.ColorRole.ButtonText,
+    ):
+        palette.setColor(QPalette.ColorGroup.Disabled, role, QColor("#64748b"))
+    palette.setColor(
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Base, QColor("#f1f5f9")
+    )
+    app.setPalette(palette)
     # The offscreen Qt backend does not discover Windows fonts automatically.
     # Register the installed font; do not distribute a copy of the font file.
     font_path = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "malgun.ttf"
@@ -170,6 +209,7 @@ class OCRWindow(QMainWindow):
         self.preview = PagePreview()
         self.preview.region_changed.connect(self.selection_changed)
         scroll = QScrollArea()
+        scroll.setObjectName("previewScroll")
         scroll.setWidget(self.preview)
         scroll.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         middle.addWidget(scroll, 1)
@@ -224,7 +264,14 @@ class OCRWindow(QMainWindow):
         bottom.addWidget(self.progress)
         layout.addLayout(bottom)
         self.setStyleSheet(
-            "QMainWindow {background:#f6f8fc;} QPushButton {padding:7px 12px;} QPushButton#primary {background:#315ceb;color:white;border-radius:5px;} QLineEdit,QSpinBox,QComboBox {padding:4px;} QPlainTextEdit,QListWidget {background:white;border:1px solid #d8e0ec;} QProgressBar {min-height:18px;}"
+            "QMainWindow {background:#f6f8fc;} "
+            "QPushButton {padding:7px 12px;} "
+            "QPushButton#primary {background:#315ceb;color:white;border-radius:5px;} "
+            "QPushButton#primary:disabled {background:#d8e0ec;color:#64748b;} "
+            "QLineEdit,QSpinBox,QComboBox {padding:4px;} "
+            "QPlainTextEdit,QListWidget {background:white;border:1px solid #d8e0ec;} "
+            "QScrollArea#previewScroll {background:#edf1f7;border:1px solid #d8e0ec;} "
+            "QProgressBar {min-height:18px;}"
         )
 
     def running(self):
