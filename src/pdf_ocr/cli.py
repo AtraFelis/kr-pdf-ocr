@@ -39,6 +39,11 @@ def main():
         "--engine", choices=("paddle", "vl", "vl16", "qwen"), default="paddle"
     )
     parser.add_argument(
+        "--device",
+        choices=("cpu", "gpu", "auto"),
+        help="처리 장치: 생략하면 PP-OCRv5는 CPU, VLM은 GPU 우선",
+    )
+    parser.add_argument(
         "--keep-hanja", action="store_true", help="병기 한자를 삭제하지 않음"
     )
     parser.add_argument(
@@ -97,6 +102,7 @@ def main():
     socket.socket.connect = deny_connection
     socket.socket.connect_ex = deny_connection
     start = time.perf_counter()
+    requested_device = args.device or ("cpu" if args.engine == "paddle" else "auto")
     if args.engine in ("vl", "vl16", "qwen"):
         from .vl_engine import LocalVLEngine
 
@@ -108,9 +114,10 @@ def main():
                 "vl": "PaddleOCR-VL-1.5",
                 "vl16": "PaddleOCR-VL-1.6",
             }[args.engine],
+            device=requested_device,
         )
     else:
-        engine = LocalPaddleEngine(ROOT)
+        engine = LocalPaddleEngine(ROOT, device=requested_device)
     initialization = time.perf_counter() - start
     spacing = None
     if args.repair_spacing:
@@ -188,6 +195,7 @@ def main():
                     "vl_line_regions": args.vl_lines,
                     "exclude_hanja_annotations": not args.keep_hanja,
                     "device": getattr(engine, "device", "cpu"),
+                    "requested_device": requested_device,
                     "dpi": args.dpi,
                     "initialization_seconds": initialization,
                     "network_connections_blocked": True,

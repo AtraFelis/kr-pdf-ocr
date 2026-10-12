@@ -21,7 +21,7 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 OCR하고, 선택한 페이�
 
 ## 3. 개발 명령과 유지 관리
 
-작업 디렉터리: 프로젝트 루트. Python 3.12와 프로젝트 전용 `.venv`를 사용한다. CPU PaddleOCR 및 GPU PaddleOCR-VL 비교 코드가 있으며 데스크톱 앱 배포 빌드는 아직 미설정이다.
+작업 디렉터리: 프로젝트 루트. Python 3.12와 프로젝트 전용 `.venv`를 사용한다. PP-OCRv5의 CPU·GPU 실행은 Windows CUDA DLL 충돌을 피하도록 `.venv-paddle`에서 분리한다. 화면·VL·Qwen은 `.venv`를 사용한다. 데스크톱 앱 배포 빌드는 아직 미설정이다.
 
 ```powershell
 # 가상환경 생성: 사용 가능한 Python 3.12 실행 파일로 실행
@@ -29,6 +29,10 @@ python -m venv .venv
 # 최초 환경 구성(네트워크 필요)
 .\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt --extra-index-url https://download.pytorch.org/whl/cu128
 .\.venv\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
+# PP-OCRv5 전용 CPU·GPU 환경: NVIDIA GPU와 호환 드라이버 필요
+.\.venv\Scripts\python.exe -m venv .venv-paddle
+.\.venv-paddle\Scripts\python.exe -m pip install -r requirements-paddle.lock.txt --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu129/
+.\.venv-paddle\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
 # 공식 모델 다운로드(네트워크 필요, 사용자 문서는 읽지 않음)
 .\.venv\Scripts\python.exe scripts/download_models.py
 .\.venv\Scripts\python.exe scripts/download_vl_model.py
@@ -36,6 +40,9 @@ python -m venv .venv
 .\.venv\Scripts\python.exe scripts/download_vl_model.py --model paddle16
 # OCR 실행: 출력 폴더는 아직 존재하지 않는 새 경로를 지정
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --output "output/ocr-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# PP-OCRv5 장치 지정: 전용 환경에서 CPU 또는 GPU 선택
+.\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --output "output/paddle-gpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
+.\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device cpu --output "output/paddle-cpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # GPU VLM: 동일한 방식으로 별도 출력, CUDA 불가 시 CPU로 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine vl --output "output/vl-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 한국어 품질 비교 후보 Qwen
@@ -71,6 +78,7 @@ python -m venv .venv
 - 화면의 페이지 번호는 1부터 시작하고 내부 인덱스와 명시적으로 변환한다. 영역은 상대 좌표로 저장하고 회전·확대·해상도 변환을 일관되게 처리한다.
 - 페이지·영역 선택은 [사용 문서](docs/PAGE_SELECTION.md)를 따른다. 생략한 페이지 범위는 전체이며 제외 후 빈 선택이나 잘못된 좌표는 OCR 전에 거부한다. 영역은 OCR 전에 자르고, 원시 입력 좌표·전체 페이지 좌표·상대 좌표를 구분해 보존한다. 페이지별 설정은 공통 영역보다 우선한다.
 - 화면의 작업 흐름은 [데스크톱 사용법](docs/DESKTOP_APP.md)을 따른다. OCR은 별도 프로세스에서 실행하고 실제 완료 페이지로 진행률을 계산한다. 취소·실패 시 이미 저장한 결과를 보존한다. 편집 내용을 버리거나 기존 TXT를 덮어쓸 때 확인하고 원본 PDF 저장은 거부한다. 화면 테스트는 offscreen 환경을 사용한다.
+- 모델과 CPU·GPU 장치는 별도로 선택한다. CPU는 속도·CPU 사용량 안내를 표시하며 정확도가 자동으로 낮아진다고 단정하지 않는다. 명시적인 GPU 선택을 조용히 CPU로 바꾸지 않는다. GUI는 PP-OCRv5 전용 환경이 있으면 해당 Python 프로세스를 사용한다. CLI의 `auto`만 GPU 불가 시 CPU로 전환한다. `.venv`에 GPU PaddlePaddle과 GPU PyTorch를 함께 설치하지 않는다. 전용 환경에는 PyTorch를 넣지 않는다.
 - OCR은 화면을 멈추지 않도록 실행하며 취소·오류 시 완료 결과를 보존한다. TXT는 UTF-8로 저장한다.
 - 모델 버전·라이선스·실행 조건을 기록한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.

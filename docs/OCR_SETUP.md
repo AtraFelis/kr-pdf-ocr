@@ -5,7 +5,7 @@
 - Windows, AMD Ryzen 7 9700X, NVIDIA RTX 5070. 초기 PaddleOCR 시험은 CPU 8스레드만 사용했다. 이후 GPU 비교 결과는 아래 추가 비교 절에 기록한다.
 - Python 3.12.14 프로젝트 `.venv`. PaddlePaddle 3.2.0, PaddleOCR 3.3.0, PaddleX 3.3.13. 전체 의존성 버전은 `requirements.lock.txt`에 기록한다.
 - PDF 렌더링은 pypdfium2, 구조 확인은 pypdf, 검사 도구는 Ruff와 pytest를 사용한다.
-- 프로그램 코드의 역할은 PDF 렌더링, 로컬 OCR 엔진, 시험 CLI로 분리한다. 데스크톱 UI 기술은 아직 선택하지 않았다.
+- 프로그램 코드의 역할은 PDF 렌더링, 로컬 OCR 엔진, 시험 CLI로 분리한다. 초기 시험은 명령행으로 진행했으며 현재 데스크톱 화면은 PySide6를 사용한다. [사용법](DESKTOP_APP.md)을 참조한다.
 
 ## 모델 정보
 
@@ -68,4 +68,19 @@ Qwen은 공백·문단 형태 면에서 유리하고 기존 PaddleOCR은 이 페
 
 추가 VL 1.6 시험은 `output/vl16-run-01`에 보존했다. 모델 리비전은 `c5630abae1d940eafe0697512a0325494b02ab42`이며 같은 로컬 Transformers 환경을 사용했다. 1~2페이지에 토큰 상한 도달은 없었고, 첫 페이지 공백 포함 오류율 약 1.09%, 공백 무시 약 0.96%였다. 세부 해석은 [모델 선택 기준](MODEL_SELECTION.md)을 참조한다. 원시 결과·한자 제외 결과를 보존하며 줄 좌표·신뢰도가 없는 한계는 유지된다.
 
-기존 PaddleOCR 위치 정보를 이용한 단일 본문 문단 복원과 선택적 Kiwi 띄어쓰기 보정이 구현되었다. 사용 방법과 검증 범위는 [문단 복원 문서](TEXT_RESTORATION.md)를 참조한다. Qwen은 품질 비교 후보로 유지하고, 추가 페이지 정답으로 문자 보존 및 공백 복원 품질을 확인한 뒤 기본 모델을 결정한다. 다음 기능 단계는 페이지 제외와 추출 영역 선택이다.
+기존 PaddleOCR 위치 정보를 이용한 단일 본문 문단 복원과 선택적 Kiwi 띄어쓰기 보정이 구현되었다. 사용 방법과 검증 범위는 [문단 복원 문서](TEXT_RESTORATION.md)를 참조한다. Qwen은 품질 비교 후보로 유지하고, 추가 페이지 정답으로 문자 보존 및 공백 복원 품질을 확인한 뒤 기본 모델을 결정한다. 페이지 제외·영역 선택·데스크톱 화면은 이후 구현했으며 현재 후속 작업은 개발 목록을 참조한다.
+
+## CPU·GPU 장치 선택 추가 (2026-10-12)
+
+PP-OCRv5의 CPU 고정을 해제하고 모델과 장치를 별도로 선택한다. 공식 Windows 설치 안내와 RTX 5070 지원 조건에 따라 PaddlePaddle-GPU 3.2.2 / CUDA 12.9를 도입했다. [공식 Windows 설치 안내](https://www.paddlepaddle.org.cn/documentation/docs/en/install/pip/windows-pip_en.html), [GPU 지원 조건](https://www.paddlepaddle.org.cn/documentation/docs/zh/install/Tables_en.html).
+
+기존 `.venv`에 GPU PaddlePaddle을 추가했을 때 PyTorch와 CUDA DLL을 함께 로딩하며 `WinError 127`이 발생했다. 가져오기 순서를 바꾸어도 다른 DLL에서 실패했다. `.venv`는 기존 CPU PaddlePaddle 3.2.0 / PyTorch CUDA 12.8 구성을 유지하고, `.venv-paddle`에는 GPU PaddlePaddle과 필요한 패키지만 설치했다. PyTorch는 전용 환경에 설치하지 않는다. GUI는 PP-OCRv5 실행에 전용 환경을 사용하며 설치 버전은 `requirements-paddle.lock.txt`에 고정했다.
+
+동일한 샘플 첫 페이지를 300 DPI, 전체 영역, 문단 복원·Kiwi 보정으로 GUI에서 실행한 결과:
+
+- CPU: 요청 `cpu`, 실제 `cpu`, 21개 영역, 처리 구간 약 7.60초, 초기화 약 2.89초, 기록 시점 RSS 약 1,243MiB.
+- GPU: 요청 `gpu`, 실제 `gpu:0`, 21개 영역, 처리 구간 약 1.50초, 초기화 약 3.14초, 기록 시점 RSS 약 2,086MiB.
+
+처리 구간은 OCR·문단 복원·보정을 포함하며 모델 초기화·PDF 렌더링·후속 파일 저장은 제외한다. RSS는 최대 메모리나 GPU VRAM이 아니다. 한 페이지의 단일 실행이므로 일반적인 속도 향상 비율이나 정확도 우열을 확정하지 않는다. 최종 결과 사이에는 한 글자의 편집 거리 차이가 있었다. GPU 전환만으로 정확도 향상을 보장하지 않는다.
+
+GUI 실행 기록은 `output/device-desktop-run/`과 각 작업 결과 폴더에 로컬 보관한다. VL 1.6도 명시적 GPU 선택으로 첫 페이지를 완료했으며 처리 구간 약 8.60초였다(`output/device-vl16-gpu-01/`). PyTorch CUDA 연산과 두 환경의 의존성·Ruff 검사를 확인했다. 이번 변경에서는 pytest 테스트 모음을 실행하지 않았으며 VLM의 전체 페이지 CPU 처리와 모든 장치별 실패·취소 조건 확인은 남아 있다.

@@ -104,7 +104,7 @@ def test_cli_crops_before_ocr_and_combines_only_selected_pages(
     calls = []
 
     class Engine:
-        def __init__(self, root):
+        def __init__(self, root, device="cpu"):
             pass
 
         def recognize(self, image):
@@ -171,7 +171,7 @@ def test_multiple_selected_pages_combined_in_pdf_order(tmp_path, monkeypatch):
     output = tmp_path / "output"
 
     class Engine:
-        def __init__(self, root):
+        def __init__(self, root, device="cpu"):
             self.calls = 0
 
         def recognize(self, image):

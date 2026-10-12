@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .devices import ocr_python
 from .pdf import page_count, render_pages
 from .preview import PagePreview
 from .selection import Region, select_pages
@@ -175,10 +176,25 @@ class OCRWindow(QMainWindow):
         side.addWidget(self.page_list, 1)
         side.addWidget(QLabel("인식 모델"))
         self.model = QComboBox()
-        self.model.addItem("PP-OCRv5 한국어 · CPU", "paddle")
-        self.model.addItem("PaddleOCR-VL 1.6 · GPU 우선", "vl16")
-        self.model.addItem("Qwen3-VL · GPU 우선", "qwen")
+        self.model.addItem("PP-OCRv5 한국어", "paddle")
+        self.model.addItem("PaddleOCR-VL 1.6", "vl16")
+        self.model.addItem("Qwen3-VL 2B", "qwen")
         side.addWidget(self.model)
+        side.addWidget(QLabel("처리 장치"))
+        self.device = QComboBox()
+        self.device.addItem("CPU", "cpu")
+        self.device.addItem("GPU · NVIDIA", "gpu")
+        side.addWidget(self.device)
+        self.device_notice = QLabel()
+        self.device_notice.setWordWrap(True)
+        self.device_notice.setStyleSheet(
+            "background:#fff7e6;color:#684313;border:1px solid #efd8aa;"
+            "border-radius:5px;padding:8px;"
+        )
+        side.addWidget(self.device_notice)
+        self.device.currentIndexChanged.connect(self.update_device_notice)
+        self.model.currentIndexChanged.connect(self.update_device_notice)
+        self.update_device_notice()
         self.repair = QCheckBox("한국어 띄어쓰기 보정 제안")
         self.repair.setChecked(True)
         side.addWidget(self.repair)
@@ -305,6 +321,22 @@ class OCRWindow(QMainWindow):
             if self.model.currentData() == "paddle"
             else "이 모델은 자체 문단 형태를 출력하므로 별도 띄어쓰기 보정을 적용하지 않습니다."
         )
+
+    def update_device_notice(self):
+        if self.device.currentData() == "cpu":
+            text = (
+                "CPU 사용 안내\nGPU보다 처리가 오래 걸릴 수 있으며, "
+                "CPU 사용량이 늘어 다른 작업이 느려질 수 있습니다. "
+                "CPU 선택 자체가 인식 정확도를 낮추는 것은 아닙니다."
+            )
+            if self.model.currentData() != "paddle":
+                text += " 이 모델은 CPU에서 특히 느리고 메모리도 많이 사용합니다."
+        else:
+            text = (
+                "GPU 사용 안내\nNVIDIA GPU와 모델에 맞는 GPU 실행 환경이 필요합니다. "
+                "실행할 수 없다면 오류 안내를 확인하거나 CPU로 바꿔 주세요."
+            )
+        self.device_notice.setText(text)
 
     def confirm_discard(self):
         if not self.editor.document().isModified():
@@ -490,6 +522,8 @@ class OCRWindow(QMainWindow):
             str(settings),
             "--engine",
             self.model.currentData(),
+            "--device",
+            self.device.currentData(),
             "--output",
             str(self.run_folder),
         ]
@@ -510,7 +544,7 @@ class OCRWindow(QMainWindow):
         self.progress.setValue(0)
         self.status.setText("인식 모델을 준비하고 있습니다…")
         self.set_busy(True)
-        self.process.start(sys.executable, args)
+        self.process.start(ocr_python(self.root, self.model.currentData()), args)
 
     def read_process_output(self):
         self.log_buffer += bytes(self.process.readAllStandardOutput()).decode(
