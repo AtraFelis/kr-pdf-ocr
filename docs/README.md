@@ -33,6 +33,7 @@
 - [기능 구현·검증 기록](history/IMPLEMENTATION_LOG.md)
 - [고유명사 사용자 사전 도입 결정](history/USER_DICTIONARY_DECISION.md)
 - [Markdown 샘플 실행·미리보기 검증](history/MARKDOWN_SAMPLE_VALIDATION.md)
+- [PR #8 CodeRabbit 리뷰 반영](history/CODERABBIT_PR8.md)
 - [구조화 Markdown 첫 연결 기록](history/STRUCTURED_MARKDOWN_IMPLEMENTATION.md)
 - [모델 정보 아이콘 구현 기록](history/MODEL_INFO_IMPLEMENTATION.md)
 - [사용자 사전 구현·품질 확인](history/USER_DICTIONARY_IMPLEMENTATION.md)

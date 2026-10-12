@@ -322,6 +322,7 @@ class OCRWindow(QMainWindow):
         self.result_tabs.setTabToolTip(
             1, "본문·기본 표·로컬 이미지를 표시합니다. 수식은 원문 표기로 확인하세요."
         )
+        self.result_tabs.currentChanged.connect(self.update_markdown_preview)
         right.addWidget(self.result_tabs, 1)
         self.review_label = QLabel(
             "인식 오류와 띄어쓰기 제안은 원문과 비교해 확인해 주세요."
@@ -384,7 +385,7 @@ class OCRWindow(QMainWindow):
         self.saved_compare_button.setEnabled(not busy)
 
     def update_save_button(self):
-        """OCR이 멈춰 있고 편집기에 내용이 있을 때만 저장 버튼을 활성화한다."""
+        """저장 버튼을 갱신하고 활성 Markdown 미리보기에만 편집 내용을 반영한다."""
         self.save_button.setEnabled(
             not self.running() and bool(self.editor.toPlainText())
         )
@@ -392,7 +393,14 @@ class OCRWindow(QMainWindow):
             "Markdown 저장" if self.result_format == "md" else "TXT 저장"
         )
         self.result_tabs.setTabEnabled(1, self.result_format == "md")
-        if self.result_format == "md":
+        self.update_markdown_preview()
+
+    def update_markdown_preview(self, index=None):
+        """Markdown 미리보기 탭이 선택된 경우에만 최신 편집 내용을 렌더링한다."""
+        if (
+            self.result_format == "md"
+            and self.result_tabs.currentWidget() is self.markdown_preview
+        ):
             self.markdown_preview.display(self.editor.toPlainText(), self.result_folder)
 
     def update_export_options(self):

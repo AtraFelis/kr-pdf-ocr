@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import time
 from importlib.metadata import version
 from pathlib import Path
@@ -74,7 +75,7 @@ class LocalStructureEngine:
 def save_structure(
     result, folder: Path, page: int, box, width: int, height: int
 ) -> dict:
-    """공식 블록·이미지를 보존하고 자른 입력 좌표와 전체 페이지 좌표를 구분해 저장한다."""
+    """블록·좌표·이미지를 보존하고 원본 이미지 경로를 동시 치환해 저장한다."""
     raw = result.json["res"]
     (folder / f"page-{page:03}-native.json").write_text(
         json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -84,13 +85,19 @@ def save_structure(
     assets = folder / "assets"
     assets.mkdir(exist_ok=True)
     image_paths = []
+    replacements = {}
     for index, (source, image) in enumerate(info["markdown_images"].items(), 1):
         if image is None:
             raise ValueError(f"공식 결과의 이미지 데이터가 없습니다: {source}")
         target = f"assets/page-{page:03}-{index:03}.png"
         image.save(folder / target)
-        markdown = markdown.replace(source, target)
+        replacements[source] = target
         image_paths.append({"source_path": source, "path": target})
+    if replacements:
+        pattern = "|".join(
+            re.escape(source) for source in sorted(replacements, key=len, reverse=True)
+        )
+        markdown = re.sub(pattern, lambda match: replacements[match.group()], markdown)
     blocks = []
     for index, block in enumerate(raw["parsing_res_list"]):
         bbox = block.get("block_bbox")

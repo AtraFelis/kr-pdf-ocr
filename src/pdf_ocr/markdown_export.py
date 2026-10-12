@@ -3,7 +3,7 @@
 import re
 import shutil
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 from uuid import uuid4
 
 from PySide6.QtCore import QIODevice, QSaveFile, QUrl
@@ -11,9 +11,51 @@ from PySide6.QtGui import QImage, QTextDocument
 from PySide6.QtWidgets import QTextBrowser
 
 
+def image_reference_spans(text: str):
+    """인라인 Markdown 이미지·HTML img의 assets 경로 위치를 찾고 코드·본문은 제외한다.
+
+    반환한 시작/끝 위치는 원문의 경로 부분만 가리킨다. 이미지 제목이나 태그의
+    다른 속성을 바꾸지 않으며 상대 경로의 URL 인코딩은 파일 검사 시 해제한다.
+    참조형 Markdown 이미지 문법은 수집하지 않는다.
+    """
+    pattern = re.compile(
+        r"(?P<fence>^\s{0,3}(?P<marker>`{3,}|~{3,})[^\n]*\n[\s\S]*?"
+        r"^\s{0,3}(?P=marker)[ \t]*$)"
+        r"|(?P<code>(?P<ticks>`+)[^\n]*?(?P=ticks))"
+        r"|(?P<html><img\b[^>]*>)"
+        r"|!\[(?:\\.|[^\]\\\n])*\]\(\s*"
+        r"(?:<(?P<angle>assets/[^>\r\n]+)>|(?P<markdown>assets/[^\s()]+))"
+        r"(?:\s+(?:\"[^\"\r\n]*\"|'[^'\r\n]*'|\([^()\r\n]*\)))?\s*\)",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    references = []
+    for match in pattern.finditer(text):
+        if match.group("fence") or match.group("code"):
+            continue
+        if match.group("html"):
+            source = re.search(
+                r"""(?<![\w:-])src\s*=\s*(?:"(?P<double>assets/[^"\r\n]+)"|'(?P<single>assets/[^'\r\n]+)'|(?P<bare>assets/[^\s>]+))""",
+                match.group("html"),
+                re.IGNORECASE,
+            )
+            if source is None:
+                continue
+            group = source.lastgroup
+            start, end = source.span(group)
+            references.append(
+                (match.start() + start, match.start() + end, source[group])
+            )
+        else:
+            group = "angle" if match.group("angle") else "markdown"
+            start, end = match.span(group)
+            references.append((start, end, match[group]))
+    return references
+
+
 def save_markdown(path: Path, text: str, source: Path | None, overwrite=False):
     """참조 이미지를 새 폴더에 복사하고 승인된 Markdown 파일만 원자적으로 저장한다.
 
+    실제 이미지 문법의 경로만 치환하고 일반 본문은 보존한다.
     기존 이미지 폴더는 변경하지 않는다. 실패 시 새로 복사된 파일이 남을 수
     있지만 기존 문서·이미지는 보존한다. 출력 이미지 링크는 상대 경로로 쓴다.
     """
@@ -21,7 +63,8 @@ def save_markdown(path: Path, text: str, source: Path | None, overwrite=False):
         raise ValueError("Markdown 결과는 .md 파일로 저장하세요.")
     if path.exists() and not overwrite:
         raise FileExistsError("기존 Markdown 덮어쓰기를 확인하세요.")
-    references = sorted(set(re.findall(r"assets/[A-Za-z0-9_./-]+", text)))
+    spans = image_reference_spans(text)
+    references = sorted({reference for _, _, reference in spans})
     if references:
         if source is None:
             raise ValueError("Markdown 이미지가 있는 원래 결과 폴더가 필요합니다.")
@@ -32,7 +75,7 @@ def save_markdown(path: Path, text: str, source: Path | None, overwrite=False):
             )
         files = []
         for reference in references:
-            image = (source / reference).resolve()
+            image = (source / unquote(reference)).resolve()
             if not image.is_relative_to(assets_root) or not image.is_file():
                 raise ValueError(f"로컬 결과 이미지 경로를 확인하세요: {reference}")
             files.append((reference, image))
@@ -43,9 +86,8 @@ def save_markdown(path: Path, text: str, source: Path | None, overwrite=False):
             name = f"image-{index:03}{image.suffix.lower()}"
             shutil.copyfile(image, target / name)
             replacements[reference] = f"{quote(target.name, safe='')}/{name}"
-        text = re.sub(
-            r"assets/[A-Za-z0-9_./-]+", lambda match: replacements[match.group()], text
-        )
+        for start, end, reference in reversed(spans):
+            text = text[:start] + replacements[reference] + text[end:]
     file = QSaveFile(str(path))
     if not file.open(QIODevice.OpenModeFlag.WriteOnly):
         raise OSError(file.errorString())
