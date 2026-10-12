@@ -12,6 +12,7 @@
 - [페이지·영역 선택](PAGE_SELECTION.md)
 - [문단 복원·띄어쓰기 보정](TEXT_RESTORATION.md)
 - [고유명사 사용자 사전 사용법](USER_DICTIONARY.md)
+- [Markdown 사용법·전용 환경](MARKDOWN_EXPORT.md)
 - [모델 안내·출력 형식 설계](MODEL_AND_EXPORT.md)
 - [GitHub 저장소 설명](GITHUB_DESCRIPTION.md)
 
@@ -31,6 +32,7 @@
 - [OCR 모델 선택 기록](history/MODEL_SELECTION.md)
 - [기능 구현·검증 기록](history/IMPLEMENTATION_LOG.md)
 - [고유명사 사용자 사전 도입 결정](history/USER_DICTIONARY_DECISION.md)
+- [구조화 Markdown 첫 연결 기록](history/STRUCTURED_MARKDOWN_IMPLEMENTATION.md)
 - [모델 정보 아이콘 구현 기록](history/MODEL_INFO_IMPLEMENTATION.md)
 - [사용자 사전 구현·품질 확인](history/USER_DICTIONARY_IMPLEMENTATION.md)
 - [작업 완료 PR·Docstring 규칙 적용](history/DOCSTRING_RULES.md)

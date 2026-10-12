@@ -4,10 +4,21 @@ import sys
 from pathlib import Path
 
 
-def ocr_python(root, engine):
-    """PP-OCRv5 전용 환경이 있으면 해당 Python 경로를, 아니면 현재 경로를 반환한다."""
+def ocr_python(root, engine, output_format="txt"):
+    """Markdown 전용 환경 또는 PP-OCRv5 전용 Python을 선택하고 나머지는 현재 경로를 쓴다.
+
+    Raises:
+        FileNotFoundError: Markdown 전용 환경이 설치되지 않은 경우.
+    """
     # Paddle and Torch ship different Windows CUDA DLLs. Run Paddle separately
     # so switching models cannot load incompatible DLLs into the same process.
+    if output_format == "md":
+        isolated = Path(root) / ".venv-doc-parser" / "Scripts" / "python.exe"
+        if not isolated.is_file():
+            raise FileNotFoundError(
+                "Markdown 전용 환경을 설치하세요. docs/MARKDOWN_EXPORT.md를 참조하세요."
+            )
+        return str(isolated)
     isolated = Path(root) / ".venv-paddle" / "Scripts" / "python.exe"
     if engine == "paddle" and isolated.is_file():
         return str(isolated)

@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--exclude-pages", default="", help="제외할 페이지 번호·범위")
     parser.add_argument("--dpi", type=int, default=300)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--format", choices=("txt", "md"), default="txt")
     parser.add_argument(
         "--engine", choices=("paddle", "vl", "vl16", "qwen"), default="paddle"
     )
@@ -73,6 +74,16 @@ def main():
     )
     parser.add_argument("--regions-file", type=Path, help="페이지별 상대 좌표 JSON")
     args = parser.parse_args()
+    if args.format == "md" and (
+        args.engine != "vl16"
+        or args.repair_spacing
+        or args.dictionary
+        or args.vl_lines
+        or args.keep_line_breaks
+    ):
+        parser.error(
+            "Markdown은 VL 1.6에서 지원하며 TXT용 줄·사전·띄어쓰기 옵션을 함께 사용할 수 없습니다."
+        )
     dictionary = None
     if args.dictionary:
         if not args.repair_spacing or args.engine != "paddle":
@@ -117,6 +128,11 @@ def main():
         save_dictionary(args.output / "dictionary.json", dictionary)
     socket.socket.connect = deny_connection
     socket.socket.connect_ex = deny_connection
+    if args.format == "md":
+        from .structure import run_structure
+
+        run_structure(args, ROOT, pages, region, page_regions)
+        return
     start = time.perf_counter()
     requested_device = args.device or ("cpu" if args.engine == "paddle" else "auto")
     if args.engine in ("vl", "vl16", "qwen"):

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "local-pdf-ocr"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["paddleocr==3.3.0", "pypdf", "pypdfium2", "pillow", "psutil"]
+dependencies = ["paddleocr>=3.3.0,<3.7", "pypdf", "pypdfium2", "pillow", "psutil"]
 
 [project.optional-dependencies]
 cpu = ["paddlepaddle==3.2.0"]

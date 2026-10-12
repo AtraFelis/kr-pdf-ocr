@@ -26,7 +26,7 @@
 
 모델 선택 옆의 **ⓘ(모델 설명)**을 클릭하거나 Tab으로 이동해 Enter·Space를 누르면 선택 모델의 권장 문서·출력 형식·현재 지원·자원 특성·한계를 확인한다. 닫기 또는 Escape로 닫으면 아이콘으로 초점이 돌아온다. 모델 변경으로 창이 자동 열리지 않으며 설정과 편집 내용을 변경하지 않는다. OCR 중에는 다른 모델 설정과 함께 비활성화한다. CPU 자원 안내는 계속 표시한다.
 
-현재 화면은 TXT 저장을 제공하며 TXT/Markdown 출력 선택과 복잡한 문서 구조 분석은 개발 예정이다. [추가 설계](MODEL_AND_EXPORT.md)를 참조한다.
+출력 형식에서 TXT 또는 Markdown을 명시적으로 선택한다. Markdown은 VL 1.6 전용 환경에서 구조 분석·이미지 저장을 연결한다. 원문 편집/미리보기와 별도 Markdown 저장을 제공하며 실제 PDF 품질·저장·취소 검증은 아직 미완료다. [Markdown 사용법](MARKDOWN_EXPORT.md)을 참조한다.
 
 모델 아래에서 처리 장치를 선택한다. 시작 시에는 GPU 없는 환경에서도 실행할 수 있는 CPU를 선택한다. 모델을 바꿔도 사용자가 고른 처리 장치는 유지되며 OCR 실행 중에는 바꿀 수 없다.
 
@@ -34,6 +34,8 @@
 - **GPU:** NVIDIA GPU와 선택한 모델에 맞는 실행 환경이 필요하다. GPU를 명시적으로 선택했는데 사용할 수 없으면 실패 원인을 안내한다. 자동으로 CPU로 전환하지 않는다. 드라이버·환경을 확인하거나 CPU를 선택한다.
 
 이 PC의 PP-OCRv5는 `.venv-paddle`의 PaddlePaddle-GPU 3.2.2 / CUDA 12.9 환경에서 CPU와 GPU를 모두 실행한다. VL·Qwen은 `.venv`의 기존 PyTorch GPU 환경을 사용한다. Windows CUDA 라이브러리 충돌을 피하도록 실행 프로세스와 환경을 분리한다. 전용 환경이 없으면 PP-OCRv5도 현재 Python 환경에서 실행하므로 GPU용 환경을 별도로 준비해야 한다. 설치 방법은 AGENTS.md를 참조한다.
+
+Markdown의 전용 환경·출력 옵션은 [사용법](MARKDOWN_EXPORT.md)을 따른다.
 
 명령행에서는 `--device cpu`, `--device gpu`, `--device auto`를 사용한다. 생략하면 PP-OCRv5는 CPU, VL·Qwen은 GPU 우선이다. `auto`만 GPU를 사용할 수 없을 때 CPU로 전환한다. PP-OCRv5 GPU 명령은 `.venv-paddle`의 Python으로 실행한다. `summary.json`에는 요청한 장치와 실제 장치를 기록한다. 명령행의 실험적 `--vl-lines`는 기존 CPU 검출기와 선택한 VLM 장치를 함께 사용한다.
 

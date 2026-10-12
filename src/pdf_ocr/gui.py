@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -42,6 +43,7 @@ from PySide6.QtWidgets import (
 from .devices import ocr_python
 from .dictionary import load_dictionary, save_dictionary
 from .dictionary_ui import ComparisonDialog, DictionaryDialog
+from .markdown_export import MarkdownPreview, save_markdown
 from .model_info import MODEL_GUIDES, ModelInfoDialog
 from .pdf import page_count, render_pages
 from .preview import PagePreview
@@ -121,6 +123,8 @@ class OCRWindow(QMainWindow):
         self.run_folder = None
         self.job_kind = "ocr"
         self.comparison_folder = None
+        self.result_format = "txt"
+        self.result_folder = None
         self.log_buffer = ""
         self.completed = set()
         self.process = QProcess(self)
@@ -144,7 +148,9 @@ class OCRWindow(QMainWindow):
         title.setStyleSheet("font-size: 23px; font-weight: 700;")
         layout.addWidget(title)
         layout.addWidget(
-            QLabel("PDF를 로컬에서 읽고, 필요한 페이지와 영역만 TXT로 저장합니다.")
+            QLabel(
+                "PDF를 로컬에서 읽고, 필요한 페이지와 영역을 TXT 또는 Markdown으로 저장합니다."
+            )
         )
         toolbar = QHBoxLayout()
         self.open_button = QPushButton("PDF 열기")
@@ -199,6 +205,14 @@ class OCRWindow(QMainWindow):
         self.model_info_button.clicked.connect(self.show_model_info)
         model_row.addWidget(self.model_info_button)
         side.addLayout(model_row)
+        side.addWidget(QLabel("출력 형식"))
+        self.output_format = QComboBox()
+        self.output_format.addItem("TXT · 본문 텍스트", "txt")
+        self.output_format.addItem("Markdown · 문서 구조", "md")
+        side.addWidget(self.output_format)
+        self.format_notice = QLabel()
+        self.format_notice.setWordWrap(True)
+        side.addWidget(self.format_notice)
         side.addWidget(QLabel("처리 장치"))
         self.device = QComboBox()
         self.device.addItem("CPU", "cpu")
@@ -222,6 +236,8 @@ class OCRWindow(QMainWindow):
         )
         self.repair.toggled.connect(self.update_spacing_option)
         self.model.currentIndexChanged.connect(self.update_spacing_option)
+        self.model.currentIndexChanged.connect(self.update_export_options)
+        self.output_format.currentIndexChanged.connect(self.update_export_options)
         side.addWidget(QLabel("고유명사 사전 · 선택 사항"))
         self.dictionary_choice = QComboBox()
         self.dictionary_choice.setToolTip(
@@ -233,8 +249,10 @@ class OCRWindow(QMainWindow):
         side.addWidget(self.dictionary_button)
         self.refresh_dictionaries()
         self.update_spacing_option()
+        self.update_export_options()
         self.keep_hanja = QCheckBox("병기 한자 유지")
         side.addWidget(self.keep_hanja)
+        self.update_export_options()
         panels.addWidget(self.sidebar)
 
         preview_panel = QWidget()
@@ -296,7 +314,15 @@ class OCRWindow(QMainWindow):
             "OCR이 끝나면 결과가 표시됩니다. 여기서 수정한 뒤 TXT로 저장하세요."
         )
         self.editor.textChanged.connect(self.update_save_button)
-        right.addWidget(self.editor, 1)
+        self.result_tabs = QTabWidget()
+        self.result_tabs.addTab(self.editor, "원문 편집")
+        self.markdown_preview = MarkdownPreview()
+        self.result_tabs.addTab(self.markdown_preview, "Markdown 미리보기")
+        self.result_tabs.setTabEnabled(1, False)
+        self.result_tabs.setTabToolTip(
+            1, "본문·기본 표·로컬 이미지를 표시합니다. 수식은 원문 표기로 확인하세요."
+        )
+        right.addWidget(self.result_tabs, 1)
         self.review_label = QLabel(
             "인식 오류와 띄어쓰기 제안은 원문과 비교해 확인해 주세요."
         )
@@ -352,7 +378,9 @@ class OCRWindow(QMainWindow):
         self.cancel_button.setEnabled(busy)
         self.editor.setReadOnly(busy)
         self.save_button.setEnabled(not busy and bool(self.editor.toPlainText()))
-        self.compare_button.setEnabled(not busy and self.run_folder is not None)
+        self.compare_button.setEnabled(
+            not busy and self.run_folder is not None and self.result_format == "txt"
+        )
         self.saved_compare_button.setEnabled(not busy)
 
     def update_save_button(self):
@@ -360,10 +388,38 @@ class OCRWindow(QMainWindow):
         self.save_button.setEnabled(
             not self.running() and bool(self.editor.toPlainText())
         )
+        self.save_button.setText(
+            "Markdown 저장" if self.result_format == "md" else "TXT 저장"
+        )
+        self.result_tabs.setTabEnabled(1, self.result_format == "md")
+        if self.result_format == "md":
+            self.markdown_preview.display(self.editor.toPlainText(), self.result_folder)
+
+    def update_export_options(self):
+        """출력 선택을 유지하고 미지원 조합과 구조 출력의 보정 제한을 안내한다."""
+        markdown = self.output_format.currentData() == "md"
+        self.format_notice.setText(
+            "Markdown은 VL 1.6에서 표·수식·이미지 구조를 추출합니다. Kiwi 보정은 적용하지 않습니다."
+            if markdown and self.model.currentData() == "vl16"
+            else "Markdown을 사용하려면 모델을 PaddleOCR-VL 1.6으로 선택하세요."
+            if markdown
+            else "TXT에서는 표 구조와 이미지가 보존되지 않을 수 있습니다."
+        )
+        self.update_spacing_option()
+        if hasattr(self, "keep_hanja"):
+            self.keep_hanja.setEnabled(not markdown)
+            self.keep_hanja.setToolTip(
+                "Markdown은 구조와 원문을 보존하므로 병기 한자도 유지합니다."
+                if markdown
+                else "TXT에서 병기 한자를 유지합니다."
+            )
 
     def update_spacing_option(self):
         """선택 모델에 맞춰 Kiwi 보정 사용 가능 여부와 안내를 갱신한다."""
-        self.repair.setEnabled(self.model.currentData() == "paddle")
+        self.repair.setEnabled(
+            self.model.currentData() == "paddle"
+            and self.output_format.currentData() == "txt"
+        )
         self.repair.setToolTip(
             "기본 모델의 결과에서 공백만 보정합니다. 고유명사 등은 원문 확인이 필요합니다."
             if self.model.currentData() == "paddle"
@@ -371,7 +427,9 @@ class OCRWindow(QMainWindow):
         )
         if hasattr(self, "dictionary_choice"):
             self.dictionary_choice.setEnabled(
-                self.model.currentData() == "paddle" and self.repair.isChecked()
+                self.model.currentData() == "paddle"
+                and self.repair.isChecked()
+                and self.output_format.currentData() == "txt"
             )
             self.dictionary_choice.setToolTip(
                 "사전은 PP-OCRv5의 띄어쓰기 보정에 적용합니다. 글자 오인식은 바꾸지 않습니다."
@@ -490,6 +548,8 @@ class OCRWindow(QMainWindow):
             item.setCheckState(Qt.CheckState.Checked)
             self.page_list.addItem(item)
         self.updating_pages = False
+        self.result_format = "txt"
+        self.result_folder = None
         self.editor.clear()
         self.run_folder = None
         self.editor.document().setModified(False)
@@ -607,6 +667,21 @@ class OCRWindow(QMainWindow):
     def start_ocr(self):
         """선택과 편집 폐기를 확인하고 새 작업 폴더에서 모델·장치별 OCR을 시작한다."""
         if (
+            self.output_format.currentData() == "md"
+            and self.model.currentData() != "vl16"
+        ):
+            QMessageBox.warning(
+                self, "출력 형식", "Markdown은 PaddleOCR-VL 1.6을 선택하세요."
+            )
+            return
+        try:
+            executable = ocr_python(
+                self.root, self.model.currentData(), self.output_format.currentData()
+            )
+        except FileNotFoundError as error:
+            QMessageBox.warning(self, "실행 환경", str(error))
+            return
+        if (
             self.running()
             or self.pdf_path is None
             or not self.apply_page_fields()
@@ -633,6 +708,8 @@ class OCRWindow(QMainWindow):
             QMessageBox.warning(self, "작업 시작 실패", str(error))
             return
         self.run_folder = session / "result"
+        self.result_format = self.output_format.currentData()
+        self.result_folder = self.run_folder
         args = [
             "-u",
             "-m",
@@ -648,12 +725,14 @@ class OCRWindow(QMainWindow):
             self.device.currentData(),
             "--output",
             str(self.run_folder),
+            "--format",
+            self.result_format,
         ]
         if self.repair.isChecked() and self.model.currentData() == "paddle":
             args.append("--repair-spacing")
             if snapshot:
                 args.extend(["--dictionary", str(snapshot)])
-        if self.keep_hanja.isChecked():
+        if self.keep_hanja.isChecked() and self.result_format == "txt":
             args.append("--keep-hanja")
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONIOENCODING", "utf-8")
@@ -669,7 +748,7 @@ class OCRWindow(QMainWindow):
         self.progress.setValue(0)
         self.status.setText("인식 모델을 준비하고 있습니다…")
         self.set_busy(True)
-        self.process.start(ocr_python(self.root, self.model.currentData()), args)
+        self.process.start(executable, args)
 
     def choose_reprocess(self):
         """사용자가 선택한 단일 페이지의 저장 OCR JSON을 별도 출력으로 재보정한다."""
@@ -781,7 +860,7 @@ class OCRWindow(QMainWindow):
                 (self.run_folder.parent / "process.log").write_text(
                     self.log_buffer, encoding="utf-8"
                 )
-                combined = self.run_folder / "combined.txt"
+                combined = self.run_folder / f"combined.{self.result_format}"
                 if combined.exists():
                     self.editor.setPlainText(combined.read_text(encoding="utf-8"))
                     self.editor.document().setModified(False)
@@ -792,6 +871,11 @@ class OCRWindow(QMainWindow):
                 self.review_label.setText(
                     f"확인 항목 {reviews}개 · 인식 결과를 원문과 비교한 뒤 저장하세요."
                 )
+                if self.result_format == "md":
+                    self.review_label.setText(
+                        "표·숫자·수식·읽기 순서와 이미지 누락을 원문에서 확인하세요."
+                    )
+                self.update_save_button()
             except (OSError, ValueError) as error:
                 QMessageBox.warning(self, "결과 읽기 실패", str(error))
         self.set_busy(False)
@@ -800,7 +884,9 @@ class OCRWindow(QMainWindow):
                 f"취소됨 · 완료된 {len(self.completed)}페이지의 결과 보존"
             )
         elif code == 0 and status == QProcess.ExitStatus.NormalExit:
-            self.status.setText("OCR 완료 · 결과를 확인하고 TXT로 저장하세요.")
+            self.status.setText(
+                "OCR 완료 · 결과를 확인하고 선택한 형식으로 저장하세요."
+            )
         else:
             self.status.setText("OCR 중단 · 완료된 결과는 보존했습니다.")
             message = QMessageBox(self)
@@ -847,18 +933,27 @@ class OCRWindow(QMainWindow):
             self.close()
 
     def save_result(self, path, overwrite=False):
-        """편집 결과를 원본과 다른 TXT 경로에 UTF-8로 원자적으로 저장한다.
+        """편집 결과를 원본과 다른 TXT·Markdown 경로에 UTF-8로 저장한다.
 
         Args:
-            path: 사용자가 선택한 TXT 출력 경로.
+            path: 현재 결과 형식에 맞는 출력 경로. Markdown은 이미지도 새 폴더로 복사한다.
             overwrite: 기존 파일 덮어쓰기가 이미 승인되었는지 여부.
 
         Raises:
-            ValueError: TXT가 아니거나 원본 PDF와 같은 경로인 경우.
+            ValueError: 출력 형식과 확장자가 다르거나 원본 PDF·잘못된 이미지 경로인 경우.
             FileExistsError: 확인 없이 기존 파일에 쓰려는 경우.
             OSError: 파일을 열거나 쓰거나 원자적 저장을 완료하지 못한 경우.
         """
         path = Path(path)
+        if self.result_format == "md":
+            if self.pdf_path and path.resolve() == self.pdf_path:
+                raise ValueError("원본 PDF에 저장할 수 없습니다.")
+            save_markdown(
+                path, self.editor.toPlainText(), self.result_folder, overwrite
+            )
+            self.editor.document().setModified(False)
+            self.status.setText(f"저장 완료 · {path.name}")
+            return
         if path.suffix.lower() != ".txt" or (
             self.pdf_path and path.resolve() == self.pdf_path
         ):
@@ -875,20 +970,23 @@ class OCRWindow(QMainWindow):
         self.status.setText(f"저장 완료 · {path.name}")
 
     def choose_save(self):
-        """TXT 경로와 덮어쓰기 승인을 받아 저장하고 파일 오류를 사용자에게 알린다."""
+        """결과 형식의 출력 경로와 덮어쓰기 승인을 받아 저장하고 오류를 알린다."""
+        suffix = ".md" if self.result_format == "md" else ".txt"
         default = (
-            self.pdf_path.with_suffix(".txt") if self.pdf_path else Path("result.txt")
+            self.pdf_path.with_suffix(suffix)
+            if self.pdf_path
+            else Path("result" + suffix)
         )
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "TXT 저장",
+            "Markdown 저장" if suffix == ".md" else "TXT 저장",
             str(default),
-            "TXT 파일 (*.txt)",
+            "Markdown 파일 (*.md)" if suffix == ".md" else "TXT 파일 (*.txt)",
             options=QFileDialog.Option.DontConfirmOverwrite,
         )
         if not path:
             return
-        target = Path(path).with_suffix(".txt")
+        target = Path(path).with_suffix(suffix)
         overwrite = False
         if target.exists():
             overwrite = (
