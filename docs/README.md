@@ -31,6 +31,7 @@
 - [OCR 모델 선택 기록](history/MODEL_SELECTION.md)
 - [기능 구현·검증 기록](history/IMPLEMENTATION_LOG.md)
 - [고유명사 사용자 사전 도입 결정](history/USER_DICTIONARY_DECISION.md)
+- [모델 정보 아이콘 구현 기록](history/MODEL_INFO_IMPLEMENTATION.md)
 - [사용자 사전 구현·품질 확인](history/USER_DICTIONARY_IMPLEMENTATION.md)
 - [작업 완료 PR·Docstring 규칙 적용](history/DOCSTRING_RULES.md)
 
