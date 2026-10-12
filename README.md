@@ -10,6 +10,7 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영�
 - [GitHub 저장소 설명](docs/GITHUB_DESCRIPTION.md)
 - [문단 복원](docs/TEXT_RESTORATION.md)
 - [OCR 모델 선택 기준](docs/MODEL_SELECTION.md)
+- [페이지·영역 선택](docs/PAGE_SELECTION.md)
 
 ## 폴더
 
@@ -26,6 +27,8 @@ Python 3.12 프로젝트 가상환경과 PaddleOCR CPU 시험 코드가 준비�
 PaddleOCR CPU와 PaddleOCR-VL·Qwen GPU 후보를 비교했습니다. 최종 모델은 아직 확정하지 않았습니다. 한국어·영어를 우선하고 명확한 한자 병기는 기본적으로 제외하며 원시 결과를 별도로 보존합니다. 단일 본문 문단 복원과 선택적 로컬 띄어쓰기 보정이 구현되어 있으며 GUI·페이지 간 연결·배포본은 아직 구현되지 않았습니다.
 
 ## 실행 방법
+
+페이지 선택·제외와 영역 지정을 지원합니다. `--pages`를 생략하면 전체 페이지를 처리합니다. 선택한 페이지의 결과는 `combined.txt`에도 합쳐 저장합니다. 마우스로 선택하는 화면은 아직 구현하지 않았습니다.
 
 프로젝트 루트에서 PowerShell로 실행합니다. 최초 모델 다운로드 후 OCR에서는 Python 소켓 연결을 차단하고 로컬 모델 파일만 사용합니다. 운영체제 방화벽에 의한 차단 시험은 아직 수행하지 않았습니다.
 

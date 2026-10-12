@@ -45,6 +45,8 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --repair-spacing --output "output/restored-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 저장된 OCR JSON 재처리(모델 재실행 없음)
 .\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02/page-001.json --repair-spacing --output "output/reprocessed-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 페이지 제외와 기준 높이 1000px의 200~800px 선택
+.\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-3 --exclude-pages 2,3 --y-range 200,800 --reference-height 1000 --output "output/region-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 검증
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check src scripts tests
@@ -65,6 +67,7 @@ python -m venv .venv
 - 이름은 역할이 드러나게 작성한다. 주석은 처리 이유를, 한국어 안내는 사용자가 취할 조치를 설명한다.
 - 개발 언어와 도구가 결정되면 표준 포맷터·정적 검사와 의존성 버전 관리를 설정한다. 기존 스타일을 따른다.
 - 화면의 페이지 번호는 1부터 시작하고 내부 인덱스와 명시적으로 변환한다. 영역은 상대 좌표로 저장하고 회전·확대·해상도 변환을 일관되게 처리한다.
+- 페이지·영역 선택은 [사용 문서](docs/PAGE_SELECTION.md)를 따른다. 생략한 페이지 범위는 전체이며 제외 후 빈 선택이나 잘못된 좌표는 OCR 전에 거부한다. 영역은 OCR 전에 자르고, 원시 입력 좌표·전체 페이지 좌표·상대 좌표를 구분해 보존한다. 페이지별 설정은 공통 영역보다 우선한다.
 - OCR은 화면을 멈추지 않도록 실행하며 취소·오류 시 완료 결과를 보존한다. TXT는 UTF-8로 저장한다.
 - 모델 버전·라이선스·실행 조건을 기록한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.
