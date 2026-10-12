@@ -47,13 +47,15 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02/page-001.json --repair-spacing --output "output/reprocessed-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 페이지 제외와 기준 높이 1000px의 200~800px 선택
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-3 --exclude-pages 2,3 --y-range 200,800 --reference-height 1000 --output "output/region-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 데스크톱 화면 실행
+.\.venv\Scripts\python.exe -m pdf_ocr.gui
 # 검증
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check src scripts tests
 .\.venv\Scripts\python.exe -m ruff format --check src scripts tests
 ```
 
-이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원과 선택적 Kiwi 띄어쓰기 보정이 구현되어 있다. GUI·페이지 간 연결·배포 빌드는 아직 미구현이다.
+이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원·선택적 Kiwi 보정·데스크톱 화면이 구현되어 있다. 페이지 간 연결·배포 빌드는 아직 미구현이다.
 
 - 도구를 도입하는 변경에서 실제 확인한 설치·실행·테스트·정적 검사·포맷 검사·빌드 명령을 이 절에 등록한다. 작업 디렉터리와 실행 전제조건을 명시하고 복사해 실행 가능한 형태로 작성한다.
 - 명령·구조·의존성이 바뀌면 AGENTS.md도 같은 변경에서 갱신한다. 오래된 지침과 중복 규칙을 제거한다.
@@ -68,6 +70,7 @@ python -m venv .venv
 - 개발 언어와 도구가 결정되면 표준 포맷터·정적 검사와 의존성 버전 관리를 설정한다. 기존 스타일을 따른다.
 - 화면의 페이지 번호는 1부터 시작하고 내부 인덱스와 명시적으로 변환한다. 영역은 상대 좌표로 저장하고 회전·확대·해상도 변환을 일관되게 처리한다.
 - 페이지·영역 선택은 [사용 문서](docs/PAGE_SELECTION.md)를 따른다. 생략한 페이지 범위는 전체이며 제외 후 빈 선택이나 잘못된 좌표는 OCR 전에 거부한다. 영역은 OCR 전에 자르고, 원시 입력 좌표·전체 페이지 좌표·상대 좌표를 구분해 보존한다. 페이지별 설정은 공통 영역보다 우선한다.
+- 화면의 작업 흐름은 [데스크톱 사용법](docs/DESKTOP_APP.md)을 따른다. OCR은 별도 프로세스에서 실행하고 실제 완료 페이지로 진행률을 계산한다. 취소·실패 시 이미 저장한 결과를 보존한다. 편집 내용을 버리거나 기존 TXT를 덮어쓸 때 확인하고 원본 PDF 저장은 거부한다. 화면 테스트는 offscreen 환경을 사용한다.
 - OCR은 화면을 멈추지 않도록 실행하며 취소·오류 시 완료 결과를 보존한다. TXT는 UTF-8로 저장한다.
 - 모델 버전·라이선스·실행 조건을 기록한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.

@@ -34,7 +34,7 @@
 - `models/`, `samples/input/`, `samples/expected/`, `output/`에는 폴더 유지용 `.gitkeep`만 추적한다.
 - 공개할 문서에도 실제 원문이나 개인정보를 복사하지 않는다. 실행 기록에는 필요한 지표와 제한 사항만 적는다.
 - 제외 파일을 강제 추가하지 않는다. 테스트 자료가 필요하면 합성하거나 배포 가능한 자료를 별도 테스트 폴더에 둔다.
-- `.gitattributes`로 텍스트 파일의 줄바꿈을 LF로 통일한다.
+- `.gitattributes`로 일반 텍스트는 LF, Windows 실행용 `.bat`는 CRLF로 관리한다.
 
 ## 작업 및 검증 절차
 
