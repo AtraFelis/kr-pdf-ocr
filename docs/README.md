@@ -12,6 +12,7 @@
 - [페이지·영역 선택](PAGE_SELECTION.md)
 - [문단 복원·띄어쓰기 보정](TEXT_RESTORATION.md)
 - [고유명사 사용자 사전 설계·개발 예정](USER_DICTIONARY.md)
+- [모델 안내·출력 형식 설계](MODEL_AND_EXPORT.md)
 - [GitHub 저장소 설명](GITHUB_DESCRIPTION.md)
 
 ## 개발 규칙
