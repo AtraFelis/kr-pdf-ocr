@@ -3,6 +3,16 @@ from pathlib import Path
 import pypdfium2 as pdfium
 
 
+def page_count(path: Path) -> int:
+    try:
+        with pdfium.PdfDocument(str(path)) as document:
+            return len(document)
+    except pdfium.PdfiumError as error:
+        raise ValueError(
+            f"PDF를 열 수 없습니다. 암호 또는 손상 여부를 확인하세요: {error}"
+        ) from error
+
+
 def render_pages(path: Path, pages: list[int], dpi: int):
     """Yield owned PIL images using one-based PDF page numbers."""
     with pdfium.PdfDocument(str(path)) as document:

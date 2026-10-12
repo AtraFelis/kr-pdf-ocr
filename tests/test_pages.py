@@ -1,8 +1,9 @@
 import pytest
 
-from pdf_ocr.cli import deny_connection, parse_pages
+from pdf_ocr.cli import deny_connection
 from pdf_ocr.engine import LocalPaddleEngine
 from pdf_ocr.pdf import render_pages
+from pdf_ocr.selection import parse_pages
 
 
 def test_page_ranges_and_duplicates():

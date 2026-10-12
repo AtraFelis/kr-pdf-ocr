@@ -6,11 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "local-pdf-ocr"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["paddlepaddle==3.2.0", "paddleocr==3.3.0", "pypdf", "pypdfium2", "pillow", "psutil"]
+dependencies = ["paddleocr==3.3.0", "pypdf", "pypdfium2", "pillow", "psutil"]
 
 [project.optional-dependencies]
+cpu = ["paddlepaddle==3.2.0"]
+gpu = ["paddlepaddle-gpu==3.2.2"]
 dev = ["ruff", "pytest"]
 vl = ["torch==2.9.1", "torchvision==0.24.1", "transformers>=5.0,<6"]
+text = ["kiwipiepy==0.24.0"]
+gui = ["PySide6-Essentials==6.10.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

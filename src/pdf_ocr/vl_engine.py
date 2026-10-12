@@ -1,12 +1,18 @@
 import os
 from pathlib import Path
 
+from .devices import resolve_device
+
 
 class LocalVLEngine:
     """Experimental page recognition; no invented line geometry or confidence."""
 
     def __init__(
-        self, root: Path, line_regions: bool = False, model_name="PaddleOCR-VL-1.5"
+        self,
+        root: Path,
+        line_regions: bool = False,
+        model_name="PaddleOCR-VL-1.5",
+        device="auto",
     ):
         directory = root / "models" / model_name
         if not (directory / "config.json").is_file():
@@ -20,12 +26,13 @@ class LocalVLEngine:
         self.torch = torch
         self.prompt = (
             "OCR:"
-            if model_name == "PaddleOCR-VL-1.5"
+            if model_name.startswith("PaddleOCR-VL-")
             else "이미지에 보이는 모든 글자를 읽기 순서대로 그대로 옮겨 적어 주세요. "
             "띄어쓰기와 문단을 보존하고, 설명이나 요약을 추가하지 마세요. "
             "보이지 않는 내용을 추측하지 마세요."
         )
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        selected = resolve_device(device, device != "cpu" and torch.cuda.is_available())
+        self.device = "cuda" if selected == "gpu" else "cpu"
         self.model = (
             AutoModelForImageTextToText.from_pretrained(
                 directory,

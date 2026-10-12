@@ -26,6 +26,8 @@ idna==3.20
 imagesize==2.0.1
 iniconfig==2.3.1
 Jinja2==3.1.6
+kiwipiepy==0.24.0
+kiwipiepy_model==0.24.0
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
@@ -55,6 +57,7 @@ pydantic_core==2.50.1
 Pygments==2.21.0
 pypdf==6.20.0
 pypdfium2==5.14.0
+PySide6_Essentials==6.10.2
 pytest==9.1.1
 python-bidi==0.6.11
 python-dateutil==2.9.0.post0
@@ -68,6 +71,7 @@ safetensors==0.8.0
 setuptools==84.0.0
 shapely==2.2.0
 shellingham==1.5.4
+shiboken6==6.10.2
 six==1.17.0
 sympy==1.14.0
 tokenizers==0.23.3

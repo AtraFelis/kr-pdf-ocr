@@ -13,13 +13,15 @@ from huggingface_hub import HfApi, snapshot_download
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=("paddle", "qwen"), default="paddle")
-    args = parser.parse_args()
-    repo = (
-        "PaddlePaddle/PaddleOCR-VL-1.5"
-        if args.model == "paddle"
-        else "Qwen/Qwen3-VL-2B-Instruct"
+    parser.add_argument(
+        "--model", choices=("paddle", "paddle16", "qwen"), default="paddle"
     )
+    args = parser.parse_args()
+    repo = {
+        "paddle": "PaddlePaddle/PaddleOCR-VL-1.5",
+        "paddle16": "PaddlePaddle/PaddleOCR-VL-1.6",
+        "qwen": "Qwen/Qwen3-VL-2B-Instruct",
+    }[args.model]
     revision = HfApi(token=False).model_info(repo).sha
     destination = ROOT / "models" / repo.split("/")[-1]
     snapshot_download(

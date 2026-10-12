@@ -10,6 +10,7 @@ output/*
 
 # Local environments and caches
 .venv/
+.venv-paddle/
 venv/
 __pycache__/
 *.py[cod]
