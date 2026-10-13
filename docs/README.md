@@ -46,6 +46,7 @@
 - [17페이지 대사의 OCR 검출 누락 수정](history/OCR_DETECTION_OMISSION.md)
 - [OCR 검출 기준 사용자 조정 검증](history/OCR_SETTINGS_CONTROL.md)
 - [DPI·검출 표시·임의 영역 재인식 검증](history/OCR_REVIEW_FLOW.md)
+- [짧은 어미 줄의 문단 복원 수정](history/SHORT_ENDING_RESTORATION.md)
 - [인용문 여는 부호의 공백 수정](history/QUOTE_SPACING.md)
 - [짧은 대사·문장부호 재인식 검증](history/SHORT_TEXT_RETRY.md)
 - [실제 짧은 대사 오류의 VLM 재인식](history/VISUAL_RETRY_ERRORS.md)
