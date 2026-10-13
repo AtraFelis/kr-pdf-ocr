@@ -70,6 +70,10 @@ python -m venv .venv
 .\.venv-doc-parser\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe scripts/download_structure_models.py
 # 실제 Markdown OCR 호출·검증 상태는 docs/MARKDOWN_EXPORT.md 참조
+# 문자 교정 평가 전용: 모델 다운로드만 네트워크 사용, 앱 자동 보정에는 미연결
+.\.venv\Scripts\python.exe scripts/download_gec_model.py
+.\.venv\Scripts\python.exe scripts/evaluate_gec.py --device cpu --output "output/gec-cpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
+.\.venv\Scripts\python.exe scripts/evaluate_gec.py --device gpu --output "output/gec-gpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 데스크톱 화면 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.gui
 # 검증
@@ -79,7 +83,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m ruff format --check src scripts tests
 ```
 
-이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원·선택적 Kiwi 보정·데스크톱 화면이 구현되어 있다. 페이지 간 연결·배포 빌드는 아직 미구현이다.
+이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원·선택적 Kiwi 보정·데스크톱 화면이 구현되어 있다. 페이지 간 연결·배포 빌드는 아직 미구현이다. `gec_kr`은 평가 전용 로컬 모델이며 합성 CPU/GPU 첫 비교 후 제품 도입을 보류했다. [평가 사용법·제한](docs/GEC_EVALUATION.md)을 따르며 기존 Kiwi·사전·편집 동작에는 연결하지 않는다.
 
 - 도구를 도입하는 변경에서 실제 확인한 설치·실행·테스트·정적 검사·포맷 검사·빌드 명령을 이 절에 등록한다. 작업 디렉터리와 실행 전제조건을 명시하고 복사해 실행 가능한 형태로 작성한다.
 - 명령·구조·의존성이 바뀌면 AGENTS.md도 같은 변경에서 갱신한다. 오래된 지침과 중복 규칙을 제거한다.

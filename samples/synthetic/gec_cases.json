@@ -1,0 +1,22 @@
+[
+  {"id":"char-01","category":"character","source":"정말 훌륨한 생각이다.","reference":"정말 훌륭한 생각이다."},
+  {"id":"char-02","category":"character","source":"오늘은 날씨가 맑슴니다.","reference":"오늘은 날씨가 맑습니다."},
+  {"id":"char-03","category":"character","source":"그는 문을 닫고 밖으러 나갔다.","reference":"그는 문을 닫고 밖으로 나갔다."},
+  {"id":"space-01","category":"spacing","source":"한국어는어렵다.","reference":"한국어는 어렵다."},
+  {"id":"space-02","category":"spacing","source":"나는오늘도책을읽는다.","reference":"나는 오늘도 책을 읽는다."},
+  {"id":"space-03","category":"spacing","source":"선 생님이 교 실로 들어왔다.","reference":"선생님이 교실로 들어왔다."},
+  {"id":"punct-01","category":"punctuation","source":"오늘은 집에서 공부했다","reference":"오늘은 집에서 공부했다."},
+  {"id":"punct-02","category":"punctuation","source":"정말이야","reference":"정말이야?"},
+  {"id":"punct-03","category":"punctuation","source":"\" 그렇다면 다시 시작할까.\"","reference":"\"… 그렇다면 다시 시작할까.\""},
+  {"id":"short-01","category":"short_dialogue","source":"ac","reference":"응?"},
+  {"id":"short-02","category":"short_dialogue","source":"응?","reference":"응?"},
+  {"id":"short-03","category":"short_dialogue","source":"아니, 난 싫어.","reference":"아니, 난 싫어."},
+  {"id":"name-01","category":"proper_name","source":"라온별은 새봄 마을에 도착했다.","reference":"라온별은 새봄 마을에 도착했다.","protected":["라온별","새봄"]},
+  {"id":"name-02","category":"proper_name","source":"서하린이 푸른솔연구소에 전화를 걸었다.","reference":"서하린이 푸른솔연구소에 전화를 걸었다.","protected":["서하린","푸른솔연구소"]},
+  {"id":"name-03","category":"proper_name","source":"라온별은정말훌륨한연구자다.","reference":"라온별은 정말 훌륭한 연구자다.","protected":["라온별"]},
+  {"id":"normal-01","category":"normal","source":"그는 조용히 책을 읽고 있었다.","reference":"그는 조용히 책을 읽고 있었다."},
+  {"id":"normal-02","category":"normal","source":"회의는 오후 세 시에 시작한다.","reference":"회의는 오후 세 시에 시작한다."},
+  {"id":"normal-03","category":"normal","source":"그런 건 됐고, 그냥 가자니까.","reference":"그런 건 됐고, 그냥 가자니까."},
+  {"id":"mixed-01","category":"numbers_english","source":"PDF 파일 12개를 UTF-8로 저장했다.","reference":"PDF 파일 12개를 UTF-8로 저장했다.","protected":["PDF","12","UTF-8"]},
+  {"id":"mixed-02","category":"numbers_english","source":"OpenAI 모델의 버전은 1.6이다.","reference":"OpenAI 모델의 버전은 1.6이다.","protected":["OpenAI","1.6"]}
+]
