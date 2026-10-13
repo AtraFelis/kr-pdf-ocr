@@ -54,6 +54,7 @@ class LocalSpacingRepair:
 
         Returns:
             좌표 복원 결과에는 새 문단·제안을 포함한 사전을 반환한다.
+            부분 복원의 모호한 문단은 공백도 바꾸지 않고 비교 배열에 그대로 보존한다.
             좌표를 적용하지 않은 결과는 기존 문단 보존을 위해 그대로 반환한다.
 
         Raises:
@@ -67,6 +68,10 @@ class LocalSpacingRepair:
         reviews = list(result["reviews"])
         for index, paragraph in enumerate(result["paragraphs"]):
             before = paragraph["text"]
+            if paragraph.get("geometry_applied") is False:
+                paragraphs.append({**paragraph})
+                baseline_paragraphs.append(before)
+                continue
             after = separate_korean_quote_boundaries(
                 self.kiwi.space(before, reset_whitespace=True)
             )
@@ -119,6 +124,15 @@ class LocalSpacingRepair:
             "spacing": {
                 "before": result["text"],
                 "without_dictionary": "\n\n".join(baseline_paragraphs),
+                "paragraphs": {
+                    "before": [paragraph["text"] for paragraph in result["paragraphs"]],
+                    "without_dictionary": baseline_paragraphs,
+                },
+                "skipped_paragraph_indices": [
+                    index
+                    for index, paragraph in enumerate(result["paragraphs"])
+                    if paragraph.get("geometry_applied") is False
+                ],
                 "dictionary": (
                     self.dictionary.identity()
                     if getattr(self, "dictionary", None)

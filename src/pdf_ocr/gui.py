@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -33,6 +34,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QSplitter,
     QTabWidget,
@@ -43,10 +45,12 @@ from PySide6.QtWidgets import (
 from .devices import ocr_python
 from .dictionary import load_dictionary, save_dictionary
 from .dictionary_ui import ComparisonDialog, DictionaryDialog
+from .engine import DEFAULT_DET_BOX_THRESH
 from .markdown_export import MarkdownPreview, save_markdown
 from .model_info import MODEL_GUIDES, ModelInfoDialog
 from .pdf import page_count, render_pages
 from .preview import PagePreview
+from .region_retry_ui import RegionRetryDialog
 from .retry_ui import RetryDialog
 from .selection import Region, select_pages
 
@@ -219,16 +223,48 @@ class OCRWindow(QMainWindow):
         self.device.addItem("CPU", "cpu")
         self.device.addItem("GPU · NVIDIA", "gpu")
         side.addWidget(self.device)
+        dpi_row = QHBoxLayout()
+        dpi_row.addWidget(QLabel("OCR 해상도(DPI)"))
+        self.dpi = QComboBox()
+        self.dpi.setAccessibleName("OCR 해상도(DPI)")
+        for value in (200, 300, 400, 600):
+            self.dpi.addItem(str(value), value)
+        self.dpi.setCurrentIndex(self.dpi.findData(300))
+        self.dpi.setToolTip(
+            "높이면 작은 글자에 유리할 수 있지만 시간·메모리가 늘어납니다. 미리보기 배율과 별개입니다."
+        )
+        dpi_row.addWidget(self.dpi)
+        side.addLayout(dpi_row)
         self.device_notice = QLabel()
         self.device_notice.setWordWrap(True)
+        self.device_notice.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )
         self.device_notice.setStyleSheet(
             "background:#fff7e6;color:#684313;border:1px solid #efd8aa;"
             "border-radius:5px;padding:8px;"
         )
-        side.addWidget(self.device_notice)
         self.device.currentIndexChanged.connect(self.update_device_notice)
         self.model.currentIndexChanged.connect(self.update_device_notice)
         self.update_device_notice()
+        detection_row = QHBoxLayout()
+        detection_row.addWidget(QLabel("글자 영역 검출 기준"))
+        self.det_box_thresh = QDoubleSpinBox()
+        self.det_box_thresh.setRange(0.01, 1.0)
+        self.det_box_thresh.setDecimals(2)
+        self.det_box_thresh.setSingleStep(0.05)
+        self.det_box_thresh.setValue(DEFAULT_DET_BOX_THRESH)
+        self.det_box_thresh.setAccessibleName("PP-OCRv5 글자 영역 검출 기준")
+        self.det_box_thresh.setToolTip(
+            "PP-OCRv5 TXT에 적용합니다. 기본 0.50. 낮추면 누락을 줄일 수 있지만 잡음도 늘어납니다. "
+            "높이면 잡음을 줄일 수 있지만 문장이 빠질 수 있습니다. 다음 OCR부터 적용하며 정확도 백분율이 아닙니다."
+        )
+        detection_row.addWidget(self.det_box_thresh)
+        side.addLayout(detection_row)
+        side.addWidget(self.device_notice)
+        defaults = QPushButton("OCR 설정 기본값 복원")
+        defaults.clicked.connect(self.reset_ocr_settings)
+        side.addWidget(defaults)
         self.repair = QCheckBox("한국어 띄어쓰기 보정 제안")
         self.repair.setChecked(True)
         side.addWidget(self.repair)
@@ -237,6 +273,11 @@ class OCRWindow(QMainWindow):
             "PP-OCRv5 TXT에서 영역을 두 조건으로 다시 읽습니다. 원문을 확인한 뒤 후보를 선택하세요. 처리 시간이 늘어납니다."
         )
         side.addWidget(self.retry_short)
+        self.join_pages = QCheckBox("페이지 사이 문단 연결 · 확인 필요")
+        self.join_pages.setToolTip(
+            "PP-OCRv5 TXT의 연속 페이지 본문을 연결합니다. 머리말·쪽번호는 영역에서 제외하세요. 모호한 단어 경계는 확인이 필요합니다."
+        )
+        side.addWidget(self.join_pages)
         self.repair.setToolTip(
             "글자는 유지하며 공백만 보정합니다. 고유명사 등은 원문 확인이 필요합니다."
         )
@@ -259,7 +300,13 @@ class OCRWindow(QMainWindow):
         self.keep_hanja = QCheckBox("병기 한자 유지")
         side.addWidget(self.keep_hanja)
         self.update_export_options()
-        panels.addWidget(self.sidebar)
+        sidebar_scroll = QScrollArea()
+        sidebar_scroll.setWidgetResizable(True)
+        sidebar_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        sidebar_scroll.setMaximumWidth(280)
+        sidebar_scroll.setMinimumWidth(280)
+        sidebar_scroll.setWidget(self.sidebar)
+        panels.addWidget(sidebar_scroll)
 
         preview_panel = QWidget()
         middle = QVBoxLayout(preview_panel)
@@ -276,9 +323,21 @@ class OCRWindow(QMainWindow):
         )
         top.addWidget(self.zoom)
         middle.addLayout(top)
+        recognition_tools = QHBoxLayout()
+        self.show_detection = QCheckBox("검출 영역 표시")
+        self.show_detection.toggled.connect(self.update_detection_overlay)
+        recognition_tools.addWidget(self.show_detection)
+        self.retry_selection = QCheckBox("재인식 영역 선택")
+        self.retry_selection.toggled.connect(self.set_retry_selection)
+        recognition_tools.addWidget(self.retry_selection)
+        self.region_retry_button = QPushButton("선택 영역 재인식")
+        self.region_retry_button.clicked.connect(self.open_region_retry)
+        recognition_tools.addWidget(self.region_retry_button)
+        middle.addLayout(recognition_tools)
         middle.addWidget(QLabel("마우스로 드래그해 가져올 영역을 선택하세요."))
         self.preview = PagePreview()
         self.preview.region_changed.connect(self.selection_changed)
+        self.preview.retry_region_changed.connect(self.retry_selection_changed)
         scroll = QScrollArea()
         scroll.setObjectName("previewScroll")
         scroll.setWidget(self.preview)
@@ -363,7 +422,7 @@ class OCRWindow(QMainWindow):
             "QPushButton {padding:7px 12px;} "
             "QPushButton#primary {background:#315ceb;color:white;border-radius:5px;} "
             "QPushButton#primary:disabled {background:#d8e0ec;color:#64748b;} "
-            "QLineEdit,QSpinBox,QComboBox {padding:4px;} "
+            "QLineEdit,QSpinBox,QDoubleSpinBox,QComboBox {padding:4px;} "
             "QPlainTextEdit,QListWidget {background:white;border:1px solid #d8e0ec;} "
             "QScrollArea#previewScroll {background:#edf1f7;border:1px solid #d8e0ec;} "
             "QProgressBar {min-height:18px;}"
@@ -381,6 +440,15 @@ class OCRWindow(QMainWindow):
         self.open_button.setEnabled(not busy)
         self.sidebar.setEnabled(not busy)
         self.preview.setEnabled(not busy)
+        self.show_detection.setEnabled(not busy)
+        self.retry_selection.setEnabled(
+            editable_region and self.output_format.currentData() == "txt"
+        )
+        self.region_retry_button.setEnabled(
+            editable_region
+            and self.output_format.currentData() == "txt"
+            and self.preview.retry_region is not None
+        )
         self.apply_region_button.setEnabled(editable_region)
         self.reset_region_button.setEnabled(editable_region)
         for field in self.coordinates:
@@ -435,6 +503,10 @@ class OCRWindow(QMainWindow):
             else "TXT에서는 표 구조와 이미지가 보존되지 않을 수 있습니다."
         )
         self.update_spacing_option()
+        if hasattr(self, "retry_selection"):
+            if markdown:
+                self.retry_selection.setChecked(False)
+            self.set_busy(self.running())
         if hasattr(self, "keep_hanja"):
             self.keep_hanja.setEnabled(not markdown)
             self.keep_hanja.setToolTip(
@@ -444,12 +516,20 @@ class OCRWindow(QMainWindow):
             )
 
     def update_spacing_option(self):
-        """선택 모델에 맞춰 Kiwi 보정 사용 가능 여부와 안내를 갱신한다."""
+        """모델·출력 형식에 맞춰 검출 기준·Kiwi·재인식·연결·사전 옵션을 갱신한다."""
+        self.det_box_thresh.setEnabled(
+            self.model.currentData() == "paddle"
+            and self.output_format.currentData() == "txt"
+        )
         self.repair.setEnabled(
             self.model.currentData() == "paddle"
             and self.output_format.currentData() == "txt"
         )
         self.retry_short.setEnabled(
+            self.model.currentData() == "paddle"
+            and self.output_format.currentData() == "txt"
+        )
+        self.join_pages.setEnabled(
             self.model.currentData() == "paddle"
             and self.output_format.currentData() == "txt"
         )
@@ -506,7 +586,7 @@ class OCRWindow(QMainWindow):
         return snapshot
 
     def update_device_notice(self):
-        """선택 장치와 모델에 따라 CPU 자원 또는 GPU 실행 환경 안내를 표시한다."""
+        """장치·모델 안내를 표시하고 좁은 패널에서도 문장이 잘리지 않게 높이를 확보한다."""
         if self.device.currentData() == "cpu":
             text = (
                 "CPU 사용 안내\nGPU보다 처리가 오래 걸릴 수 있으며, "
@@ -521,6 +601,8 @@ class OCRWindow(QMainWindow):
                 "실행할 수 없다면 오류 안내를 확인하거나 CPU로 바꿔 주세요."
             )
         self.device_notice.setText(text)
+        # 입력 행이 확보하는 패널 폭보다 좁은 폭으로 계산해 줄바꿈 높이를 보장한다.
+        self.device_notice.setMinimumHeight(self.device_notice.heightForWidth(200))
 
     def show_model_info(self):
         """선택 모델 설명을 클릭·키보드로 열고 닫은 뒤 정보 버튼에 초점을 돌린다."""
@@ -633,7 +715,7 @@ class OCRWindow(QMainWindow):
             return
         self.preview.clear_image()
         try:
-            # Preview DPI is separate from the OCR's 300 DPI; regions are normalized.
+            # Preview DPI is separate from the selected OCR DPI; regions are normalized.
             for _, image in render_pages(self.pdf_path, [index + 1], 96):
                 self.preview_size = image.size
                 self.preview.set_image(image)
@@ -647,7 +729,73 @@ class OCRWindow(QMainWindow):
             f"미리보기 기준 픽셀 좌표 · {self.preview_size[0]} × {self.preview_size[1]}"
         )
         self.set_current_region(self.regions.get(index + 1, Region()))
+        self.update_detection_overlay()
         self.set_busy(self.running())
+
+    def reset_ocr_settings(self):
+        """다음 OCR의 DPI와 검출 기준만 기본값으로 되돌리고 결과는 유지한다."""
+        self.dpi.setCurrentIndex(self.dpi.findData(300))
+        self.det_box_thresh.setValue(DEFAULT_DET_BOX_THRESH)
+
+    def update_detection_overlay(self):
+        """현재 결과 페이지의 실제 원시 좌표만 미리보기 상대 다각형으로 표시한다."""
+        self.preview.set_polygons([])
+        folder = self.result_folder
+        if not self.show_detection.isChecked() or folder is None:
+            return
+        path = folder / f"page-{self.page_list.currentRow() + 1:03}.json"
+        if not path.is_file():
+            return
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            polygons = []
+            for line in record.get("lines", []):
+                polygon = line.get("polygon")
+                if polygon:
+                    polygons.append(
+                        [
+                            [x / record["width"], y / record["height"]]
+                            for x, y in polygon
+                        ]
+                    )
+            self.preview.set_polygons(polygons)
+            if not polygons:
+                self.status.setText(
+                    "이 결과는 줄 좌표를 제공하지 않아 검출 영역을 표시하지 않습니다."
+                )
+        except (OSError, ValueError, KeyError, TypeError, ZeroDivisionError) as error:
+            self.status.setText(f"검출 영역을 읽지 못했습니다: {error}")
+
+    def set_retry_selection(self, enabled):
+        """미리보기 드래그를 재인식 모드로 전환하며 추출 영역 설정은 보존한다."""
+        self.preview.set_retry_mode(enabled)
+        self.status.setText(
+            "다시 읽을 영역을 드래그한 뒤 선택 영역 재인식을 누르세요. 추출 범위는 유지됩니다."
+            if enabled
+            else "드래그로 PDF 추출 영역을 선택합니다."
+        )
+
+    def retry_selection_changed(self, region):
+        """재인식 전용 선택이 끝나면 페이지·영역 작업 버튼을 활성화한다."""
+        self.set_busy(self.running())
+
+    def open_region_retry(self):
+        """현재 PDF의 명시적 선택 영역을 별도 TXT 후보로 읽는 비교 창을 연다."""
+        if self.running() or self.pdf_path is None or self.preview.retry_region is None:
+            return
+        if self.output_format.currentData() != "txt":
+            return
+        RegionRetryDialog(
+            self.root,
+            self.pdf_path,
+            self.page_list.currentRow() + 1,
+            self.preview.retry_region,
+            self.dpi.currentData(),
+            self.device.currentData(),
+            self.det_box_thresh.value(),
+            self.model.currentData(),
+            self,
+        ).exec()
 
     def set_current_region(self, region):
         """상대 영역을 미리보기와 기준 이미지의 픽셀 좌표 입력란에 반영한다."""
@@ -757,17 +905,27 @@ class OCRWindow(QMainWindow):
             self.model.currentData(),
             "--device",
             self.device.currentData(),
+            "--dpi",
+            str(self.dpi.currentData()),
             "--output",
             str(self.run_folder),
             "--format",
             self.result_format,
         ]
+        if self.model.currentData() == "paddle" and self.result_format == "txt":
+            args.extend(["--det-box-thresh", f"{self.det_box_thresh.value():.2f}"])
         if self.repair.isChecked() and self.model.currentData() == "paddle":
             args.append("--repair-spacing")
             if snapshot:
                 args.extend(["--dictionary", str(snapshot)])
         if self.keep_hanja.isChecked() and self.result_format == "txt":
             args.append("--keep-hanja")
+        if (
+            self.join_pages.isChecked()
+            and self.model.currentData() == "paddle"
+            and self.result_format == "txt"
+        ):
+            args.append("--join-pages")
         if (
             self.retry_short.isChecked()
             and self.model.currentData() == "paddle"
@@ -782,6 +940,7 @@ class OCRWindow(QMainWindow):
         self.job_kind = "ocr"
         self.completed = set()
         self.log_buffer = ""
+        self.preview.set_polygons([])
         self.editor.clear()
         self.editor.document().setModified(False)
         self.progress.setRange(0, len(pages))
@@ -836,6 +995,8 @@ class OCRWindow(QMainWindow):
             args.extend(["--dictionary", str(snapshot)])
         if self.keep_hanja.isChecked():
             args.append("--keep-hanja")
+        if self.join_pages.isChecked():
+            args.append("--join-pages")
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONIOENCODING", "utf-8")
         self.process.setProcessEnvironment(environment)
@@ -890,7 +1051,7 @@ class OCRWindow(QMainWindow):
             )
 
     def process_finished(self, code, status):
-        """완료된 결과·로그를 복구하고 정상 완료·취소·실패 상태를 구분해 표시한다."""
+        """결과·로그·페이지 연결/검토 수를 복구하고 완료·취소·실패 상태를 표시한다."""
         self.read_process_output()
         if self.job_kind == "reprocess":
             self.reprocess_finished(code, status)
@@ -905,12 +1066,36 @@ class OCRWindow(QMainWindow):
                     self.editor.setPlainText(combined.read_text(encoding="utf-8"))
                     self.editor.document().setModified(False)
                 reviews = 0
+                partial_pages = 0
                 for path in self.run_folder.glob("page-*.json"):
                     record = json.loads(path.read_text(encoding="utf-8"))
                     reviews += len((record.get("restoration") or {}).get("reviews", []))
+                    partial_pages += bool(
+                        (record.get("restoration") or {}).get(
+                            "partial_geometry_applied"
+                        )
+                    )
+                connection_label = ""
+                connection_path = self.run_folder / "connections.json"
+                if connection_path.is_file() and self.result_format == "txt":
+                    connections = json.loads(
+                        connection_path.read_text(encoding="utf-8")
+                    )
+                    if connections.get("enabled"):
+                        boundaries = connections.get("boundaries", [])
+                        joined = sum(item["status"] == "joined" for item in boundaries)
+                        reviews += sum(
+                            bool(item.get("review_required")) for item in boundaries
+                        )
+                        connection_label = f"페이지 경계 연결 {joined}개 · "
                 self.review_label.setText(
-                    f"확인 항목 {reviews}개 · 인식 결과를 원문과 비교한 뒤 저장하세요."
+                    f"{connection_label}확인 항목 {reviews}개 · 인식 결과를 원문과 비교한 뒤 저장하세요."
                 )
+                if partial_pages:
+                    self.review_label.setText(
+                        self.review_label.text()
+                        + f" · 부분 복원 {partial_pages}페이지(겹침 영역은 원문 유지)"
+                    )
                 if self.result_format == "md":
                     self.review_label.setText(
                         "표·숫자·수식·읽기 순서와 이미지 누락을 원문에서 확인하세요."
@@ -919,6 +1104,7 @@ class OCRWindow(QMainWindow):
             except (OSError, ValueError) as error:
                 QMessageBox.warning(self, "결과 읽기 실패", str(error))
         self.set_busy(False)
+        self.update_detection_overlay()
         if self.cancelled:
             self.status.setText(
                 f"취소됨 · 완료된 {len(self.completed)}페이지의 결과 보존"

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .dictionary import load_dictionary, save_dictionary
+from .page_join import save_combined
 from .paragraphs import restore_paragraphs
 
 
@@ -37,30 +38,31 @@ def saved_pages(source: Path) -> list[tuple[Path, dict]]:
     return sorted(records, key=lambda item: item[1].get("page", 0))
 
 
-def reprocess(source: Path, output: Path, spacing=None, keep_hanja=False):
+def reprocess(
+    source: Path, output: Path, spacing=None, keep_hanja=False, join_pages=False
+):
     """원시 결과로 재보정하고 비교 TXT·JSON을 새 폴더에 저장한다.
 
     사용자 편집본과 원본 파일은 수정하지 않는다. 사전은 좌표 복원이 가능한
     결과에만 적용하며 완료한 페이지는 실패·취소 뒤에도 디스크에 남는다.
+    join_pages는 통합/비교 TXT의 연속 페이지 문단만 연결하며 페이지별
+    결과를 바꾸지 않는다. 연결 여부·출처는 connections.json에 저장한다.
     """
     pages = saved_pages(source)
     output.mkdir(parents=True, exist_ok=False)
     dictionary = getattr(spacing, "dictionary", None)
     if dictionary:
         save_dictionary(output / "dictionary.json", dictionary)
-    texts, baselines, originals = [], [], []
+    records = []
     for index, (path, record) in enumerate(pages, 1):
         restored = restore_paragraphs(record["lines"], not keep_hanja)
         if spacing and dictionary and not restored["geometry_applied"]:
             raise ValueError(
                 f"{path.name}: 좌표가 없거나 겹쳐 사전 보정을 적용할 수 없습니다."
             )
-        before = restored["text"]
         if spacing:
             restored = spacing.repair(restored)
-        texts.append(restored["text"])
-        originals.append(before)
-        baselines.append(restored.get("spacing", {}).get("without_dictionary", before))
+        records.append({**record, "restoration": restored})
         stem = f"page-{record.get('page', index):03}"
         (output / f"{stem}.json").write_text(
             json.dumps(
@@ -69,12 +71,12 @@ def reprocess(source: Path, output: Path, spacing=None, keep_hanja=False):
             encoding="utf-8",
         )
         (output / f"{stem}.txt").write_text(restored["text"] + "\n", encoding="utf-8")
-        for name, values in (
-            ("combined.txt", texts),
-            ("without-dictionary.txt", baselines),
-            ("before-spacing.txt", originals),
+        for name, variant in (
+            ("combined.txt", None),
+            ("without-dictionary.txt", "without_dictionary"),
+            ("before-spacing.txt", "before"),
         ):
-            (output / name).write_text("\n\n".join(values) + "\n", encoding="utf-8")
+            save_combined(output, records, join_pages, variant, name)
         if len(pages) == 1:
             (output / "restored.txt").write_text(
                 restored["text"] + "\n", encoding="utf-8"
@@ -92,6 +94,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--keep-hanja", action="store_true")
     parser.add_argument("--repair-spacing", action="store_true")
+    parser.add_argument(
+        "--join-pages", action="store_true", help="연속 페이지의 단일 본문 문단 연결"
+    )
     parser.add_argument("--dictionary", type=Path)
     args = parser.parse_args()
     try:
@@ -103,7 +108,7 @@ def main():
             from .spacing import LocalSpacingRepair
 
             spacing = LocalSpacingRepair(dictionary)
-        reprocess(args.input, args.output, spacing, args.keep_hanja)
+        reprocess(args.input, args.output, spacing, args.keep_hanja, args.join_pages)
     except (ValueError, TypeError, OSError, KeyError) as error:
         parser.error(str(error))
 

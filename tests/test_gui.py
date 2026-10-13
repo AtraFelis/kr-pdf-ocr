@@ -78,6 +78,225 @@ def test_coordinate_labels_stay_next_to_fields_when_widened(window, application)
     assert widths[1] > widths[0]
 
 
+def test_detection_threshold_keeps_value_and_disables_unsupported_options(
+    window, application
+):
+    """검출 값은 모델·형식 전환 후 유지하며 미지원 조합과 작업 중에는 잠근다."""
+    assert window.det_box_thresh.value() == 0.5
+    window.det_box_thresh.setValue(0.6)
+    window.model.setCurrentIndex(window.model.findData("vl16"))
+    assert not window.det_box_thresh.isEnabled()
+    window.model.setCurrentIndex(window.model.findData("paddle"))
+    assert window.det_box_thresh.isEnabled()
+    application.processEvents()
+    assert window.device_notice.height() >= window.device_notice.heightForWidth(
+        window.device_notice.width()
+    )
+    assert window.det_box_thresh.value() == 0.6
+    window.output_format.setCurrentIndex(window.output_format.findData("md"))
+    assert not window.det_box_thresh.isEnabled()
+    window.output_format.setCurrentIndex(window.output_format.findData("txt"))
+    window.set_busy(True)
+    assert not window.det_box_thresh.isEnabled()
+    window.set_busy(False)
+    assert window.det_box_thresh.value() == 0.6
+    assert window.det_box_thresh.isEnabled()
+
+
+@pytest.mark.parametrize("engine", ["paddle", "qwen"])
+def test_gui_passes_detection_threshold_only_to_paddle(
+    window, pdf, monkeypatch, engine
+):
+    """화면 입력값은 PP-OCRv5 작업 인자로만 고정하고 다른 모델에는 보내지 않는다."""
+    import sys
+
+    window.load_pdf(pdf)
+    window.model.setCurrentIndex(window.model.findData(engine))
+    window.det_box_thresh.setValue(0.6)
+    window.dpi.setCurrentIndex(window.dpi.findData(400))
+    monkeypatch.setattr("pdf_ocr.gui.ocr_python", lambda *args: sys.executable)
+    calls = []
+    monkeypatch.setattr(window.process, "start", lambda *args: calls.append(args))
+    window.start_ocr()
+    assert len(calls) == 1
+    arguments = calls[0][1]
+    assert arguments[arguments.index("--dpi") + 1] == "400"
+    if engine == "paddle":
+        assert arguments[arguments.index("--det-box-thresh") + 1] == "0.60"
+    else:
+        assert "--det-box-thresh" not in arguments
+
+
+def test_dpi_reset_preserves_editor_and_selection(window):
+    """해상도·검출 기본값 복원이 기존 편집 내용과 추출 영역을 변경하지 않는다."""
+    window.dpi.setCurrentIndex(window.dpi.findData(600))
+    window.det_box_thresh.setValue(0.4)
+    window.editor.setPlainText("수정한 글자")
+    original = Region(0, 0.2, 1, 0.8)
+    window.preview.set_region(original)
+    window.reset_ocr_settings()
+    assert window.dpi.currentData() == 300
+    assert window.det_box_thresh.value() == 0.5
+    assert window.preview.region == original
+    assert window.editor.toPlainText() == "수정한 글자"
+
+
+def test_detection_overlay_uses_raw_page_coordinates(window, pdf, tmp_path):
+    """전체 페이지 픽셀 좌표를 DPI·확대율과 독립적으로 표시하고 페이지 전환 때 지운다."""
+    import json
+
+    window.load_pdf(pdf)
+    folder = tmp_path / "result"
+    folder.mkdir()
+    record = {
+        "width": 1000,
+        "height": 2000,
+        "lines": [
+            {
+                "text": "본문",
+                "polygon": [[200, 400], [800, 400], [800, 800], [200, 800]],
+            },
+            {"text": "좌표 없음", "polygon": None},
+        ],
+    }
+    path = folder / "page-001.json"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    before = path.read_bytes()
+    window.result_folder = folder
+    window.show_detection.setChecked(True)
+    assert window.preview.polygons[0][0].x() == 0.2
+    assert window.preview.polygons[0][0].y() == 0.2
+    window.preview.set_zoom(2)
+    assert window.preview.polygons[0][0].x() == 0.2
+    window.show_detection.setChecked(False)
+    assert not window.preview.polygons
+    window.show_detection.setChecked(True)
+    window.page_list.setCurrentRow(1)
+    assert not window.preview.polygons
+    assert path.read_bytes() == before
+
+
+def test_retry_drag_does_not_change_extraction_region(application):
+    """역방향 재인식 드래그는 상대 영역만 만들고 기존 추출 영역은 보존한다."""
+    widget = PagePreview()
+    with Image.new("RGB", (400, 600), "white") as image:
+        widget.set_image(image)
+    original = Region(0, 0.1, 1, 0.9)
+    widget.set_region(original)
+    widget.set_retry_mode(True)
+    selections = []
+    widget.retry_region_changed.connect(selections.append)
+    widget.show()
+    application.processEvents()
+    QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=QPoint(336, 496))
+    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(96, 136))
+    assert selections[0].values() == pytest.approx([0.2, 0.2, 0.8, 0.8])
+    assert widget.region == original
+    widget.clear_image()
+    assert widget.retry_region is None
+    widget.close()
+
+
+@pytest.mark.parametrize("value", [float("nan"), -0.1, 1.1])
+def test_detection_overlay_rejects_invalid_relative_coordinates(application, value):
+    """손상된 좌표를 표시용 다각형이나 신뢰도로 생성하지 않고 거부한다."""
+    widget = PagePreview()
+    with pytest.raises(ValueError, match="상대 좌표"):
+        widget.set_polygons([[[value, 0.1], [0.8, 0.1], [0.8, 0.2]]])
+    assert not widget.polygons
+    widget.close()
+
+
+@pytest.mark.parametrize("clipped", [False, True])
+def test_arbitrary_retry_arguments_candidate_and_safe_insertion(
+    window, pdf, tmp_path, monkeypatch, clipped
+):
+    """새 영역 작업의 인자·토큰 잘림 거부·명시적 삽입·실행 취소와 원본 보존을 확인한다."""
+    import json
+    import sys
+
+    from PySide6.QtCore import QProcess
+
+    from pdf_ocr.region_retry_ui import RegionRetryDialog
+
+    region = Region(0, 0.2, 1, 0.8)
+    window.editor.setPlainText("편집본")
+    dlg = RegionRetryDialog(
+        tmp_path, pdf, 1, region, 400, "gpu", 0.45, "paddle", window
+    )
+    calls = []
+    monkeypatch.setattr(
+        "pdf_ocr.region_retry_ui.ocr_python", lambda *args: sys.executable
+    )
+    monkeypatch.setattr(dlg.process, "start", lambda *args: calls.append(args))
+    dlg.start()
+    arguments = calls[0][1]
+    assert arguments[arguments.index("--dpi") + 1] == "400"
+    assert arguments[arguments.index("--region") + 1] == "0,0.2,1,0.8"
+    assert arguments[arguments.index("--det-box-thresh") + 1] == "0.45"
+    assert "--keep-line-breaks" in arguments
+    assert not dlg.model.isEnabled()
+    dlg.active_folder.mkdir()
+    (dlg.active_folder / "page-001.json").write_text(
+        json.dumps({"lines": [{"text": "새 후보", "token_limit_reached": clipped}]}),
+        encoding="utf-8",
+    )
+    with Image.new("RGB", (80, 20), "white") as image:
+        image.save(dlg.active_folder / "page-001-input.png")
+    dlg.process.finished.emit(0, QProcess.ExitStatus.NormalExit)
+    assert window.editor.toPlainText() == "편집본"
+    if clipped:
+        assert not dlg.candidates
+        assert not dlg.insert_button.isEnabled()
+        assert "잘렸" in dlg.status.text()
+    else:
+        assert dlg.candidates[0]["text"] == "새 후보"
+        cursor = window.editor.textCursor()
+        cursor.select(cursor.SelectionType.Document)
+        window.editor.setTextCursor(cursor)
+        dlg.insert_candidate()
+        assert window.editor.toPlainText() == "편집본새 후보"
+        window.editor.undo()
+        assert window.editor.toPlainText() == "편집본"
+    assert pdf.is_file()
+    dlg.close()
+
+
+def test_region_retry_cancel_preserves_editor_and_previous_candidates(
+    window, pdf, tmp_path, monkeypatch
+):
+    """실제 소유 프로세스를 취소해 완료 신호·취소 안내와 기존 편집/후보 보존을 확인한다."""
+    import sys
+
+    from PySide6.QtCore import QProcess
+
+    from pdf_ocr.region_retry_ui import RegionRetryDialog
+
+    window.editor.setPlainText("편집본")
+    dlg = RegionRetryDialog(
+        tmp_path, pdf, 1, Region(), 300, "cpu", 0.5, "paddle", window
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "pdf_ocr.region_retry_ui.ocr_python", lambda *args: sys.executable
+        )
+        patch.setattr(dlg.process, "start", lambda *args: None)
+        dlg.start()
+    dlg.candidates.append({"text": "이전 후보", "folder": tmp_path})
+    dlg.process.start(sys.executable, ["-c", "import time; time.sleep(30)"])
+    assert dlg.process.waitForStarted(3000)
+    dlg.cancel()
+    for _ in range(150):
+        QTest.qWait(20)
+        if dlg.run_button.isEnabled():
+            break
+    assert dlg.process.state() == QProcess.ProcessState.NotRunning
+    assert "취소" in dlg.status.text()
+    assert dlg.candidates[0]["text"] == "이전 후보"
+    assert window.editor.toPlainText() == "편집본"
+    dlg.close()
+
+
 @pytest.mark.parametrize("zoom", [0.5, 1, 1.5])
 def test_reverse_mouse_drag_has_same_relative_region(application, zoom):
     """역방향 드래그와 확대 변화에도 상대 선택 범위가 같은지 확인한다."""

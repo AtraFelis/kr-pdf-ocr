@@ -43,6 +43,10 @@ python -m venv .venv
 # OCR 실행: 출력 폴더는 아직 존재하지 않는 새 경로를 지정
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --output "output/ocr-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # PP-OCRv5 장치 지정: 전용 환경에서 CPU 또는 GPU 선택
+# 선택적 검출 기준: PP-OCRv5 TXT 전용, 기본 0.50, 0.01~1.00
+# DPI 선택: GUI는 200/300/400/600, 미리보기는 별도 96 DPI
+.\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --dpi 200 --repair-spacing --output "output/paddle-dpi-$(Get-Date -Format yyyyMMdd-HHmmss)"
+.\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --det-box-thresh 0.45 --output "output/paddle-threshold-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --output "output/paddle-gpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device cpu --output "output/paddle-cpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 짧은 대사·문장부호 재인식 후보: 비교 후 수동 채택
@@ -72,6 +76,8 @@ python -m venv .venv
 # 실제 Markdown OCR 호출·검증 상태는 docs/MARKDOWN_EXPORT.md 참조
 # 데스크톱 화면 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.gui
+# 페이지 연결: 저장 JSON 재처리, 새 출력 경로 사용
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/_archive/cleanup-20261013-150057/ocr-run-02 --repair-spacing --join-pages --output "output/connected-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 검증
 .\.venv\Scripts\python.exe scripts/check_docstrings.py
 .\.venv\Scripts\python.exe -m pytest --basetemp "output/pytest-$(Get-Date -Format yyyyMMdd-HHmmss-fff)"
@@ -79,7 +85,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m ruff format --check src scripts tests
 ```
 
-이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원·선택적 Kiwi 보정·데스크톱 화면이 구현되어 있다. 페이지 간 연결·배포 빌드는 아직 미구현이다.
+이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원·선택적 Kiwi 보정·데스크톱 화면이 구현되어 있다. 페이지 간 연결은 PP-OCRv5 TXT의 선택 옵션으로 제공하며 [사용법](docs/PAGE_CONNECTION.md)을 따른다. 모델 학습·별도 언어 모델의 문장 교정은 최신 사용자 결정에 따라 개발 범위에서 제외한다. 기존 OCR·Kiwi 공백 보정·원본 이미지 재인식은 유지한다. 배포 빌드는 아직 미구현이다.
 
 - 도구를 도입하는 변경에서 실제 확인한 설치·실행·테스트·정적 검사·포맷 검사·빌드 명령을 이 절에 등록한다. 작업 디렉터리와 실행 전제조건을 명시하고 복사해 실행 가능한 형태로 작성한다.
 - 명령·구조·의존성이 바뀌면 AGENTS.md도 같은 변경에서 갱신한다. 오래된 지침과 중복 규칙을 제거한다.
@@ -91,6 +97,8 @@ python -m venv .venv
 - 작업 전에 이 파일, 기획서, 개발 목록과 관련 코드를 읽는다. 한 번에 하나의 기능이나 오류를 해결한다.
 - PDF 처리, OCR, 페이지·영역 선택, 문단 복원, 저장, 화면 코드를 분리한다.
 - OCR 모델은 공통 인터페이스로 연결한다. 원본 인식 결과와 위치 정보를 보존하고 신뢰도를 임의로 만들지 않는다.
+- GUI DPI·검출 영역 표시·임의 재인식은 [사용법](docs/OCR_REVIEW.md)을 따른다. 미리보기는 96 DPI, OCR은 사용자가 고른 DPI이며 추출·재인식 선택을 독립적인 상대 좌표로 관리한다. 임의 재인식은 명시적으로 고른 PDF 영역을 새 출력·별도 프로세스로 읽고 원시 결과·추출 범위·편집본을 자동 변경하지 않는다. 사용자 후보 삽입은 현재 커서에 추가하고 선택된 원문을 덮어쓰지 않으며 실행 취소를 제공한다.
+- PP-OCRv5의 검출 영역 점수 기준은 기본 `text_det_box_thresh=0.5`이며 인식 신뢰도와 구분한다. 사용자가 [OCR 설정](docs/OCR_SETTINGS.md)에 따라 화면 또는 `--det-box-thresh`로 0.01~1.00의 유한한 값을 지정할 수 있다. 미지원 모델·형식의 명시적 값은 실행 전에 거부한다. 실제 전달 설정은 TXT 실행의 `summary.json.ocr_settings`에 기록한다. 누락된 줄은 저장 JSON 재보정으로 생성하지 않고 새 OCR을 실행한다. 검증 범위·잡음 검출 가능성은 [검출 누락 기록](docs/history/OCR_DETECTION_OMISSION.md)을 따른다.
 - 이름은 역할이 드러나게 작성한다. 주석은 처리 이유를, 한국어 안내는 사용자가 취할 조치를 설명한다.
 - 코드를 작성하거나 수정할 때 docstring을 반드시 작성·갱신한다. `src/`, `scripts/`, `tests/`의 모든 Python 모듈·클래스·함수·메서드에 적용하며 비공개·중첩 정의·생성자·Qt 이벤트 처리·테스트와 보조 함수도 포함한다. 목적과 실제 동작을 적고 복잡한 함수는 입력·반환/생성값·예외·좌표 단위·부작용·원본 보존 조건을 필요한 만큼 설명한다. 형식과 검사는 [코딩 컨벤션](docs/rules/CODING_CONVENTIONS.md)을 따른다. Docstring 문법이 없는 실행 파일은 동등한 문서 주석을 작성한다.
 - 개발 언어와 도구가 결정되면 표준 포맷터·정적 검사와 의존성 버전 관리를 설정한다. 기존 스타일을 따른다.
@@ -102,7 +110,7 @@ python -m venv .venv
 - 모델 버전·라이선스·실행 조건을 기록한다.
 - 짧은 줄 재인식은 [사용법](docs/SHORT_TEXT_RETRY.md)을 따른다. PP-OCRv5 TXT의 선택 기능이며 여백·배율별 후보와 실패·입력/전체 좌표를 원시 결과와 분리해 기록한다. 선택 줄의 VL 1.6·Qwen 재인식은 별도 .venv 프로세스에서 실행하고 외부 연결을 차단한다. 점수로 자동 채택하거나 문장부호를 추측 생성하지 않는다. 비교 창에서 이미지를 확인한 뒤 후보를 복사하거나 유일한 일치 구간에만 반영하며 실행 취소를 지원한다. 중복 구간·수정본을 추측 교체하지 않는다. 후보 선정 상한·재표본화 한계·처리 시간 증가를 명시한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.
-- 기본 문단 복원은 단일 본문 영역만 처리한다. 좌표가 없거나 같은 높이에 영역이 겹치면 줄바꿈을 보존하고 확인 대상으로 남긴다. `--keep-line-breaks`로 복원을 끌 수 있다. `--repair-spacing`은 Kiwi 로컬 모델을 사용하는 선택 기능이며 공백을 제외한 글자가 변경되면 적용을 중단한다. 변경 제안과 모호한 연결은 JSON에 기록한다.
+- 기본 문단 복원은 단일 본문 영역만 처리한다. 좌표가 없거나 겹침이 많으면 기존 줄바꿈을 보존한다. 드문 겹침은 모호한 블록의 줄·글자를 그대로 두고 정상 구간만 부분 복원해 확인 대상으로 남긴다. 부분 복원의 적용/제외 문단과 원시 줄 인덱스를 기록하고 모호한 문단에는 Kiwi·사전을 적용하지 않는다. 부분 복원 페이지는 페이지 간 연결에서 보존한다. `--keep-line-breaks`로 복원을 끌 수 있다. `--repair-spacing`은 Kiwi 로컬 모델을 사용하는 선택 기능이며 공백을 제외한 글자가 변경되면 적용을 중단한다. 변경 제안과 모호한 연결은 JSON에 기록한다.
 - Markdown은 [사용법](docs/MARKDOWN_EXPORT.md)을 따른다. VL 1.6 공식 배치·인식 파이프라인과 별도 환경을 사용하고 모델·출력 형식을 자동 변경하지 않는다. 블록·원시 결과·이미지·좌표를 보존하며 TXT용 Kiwi·사전·한자 필터를 적용하지 않는다. 미리보기의 외부 URL·결과 밖 파일 접근을 금지하고 내보내기는 새 이미지 폴더와 상대 링크를 사용한다. 샘플 실행과 회귀 검사는 [검증 기록](docs/history/MARKDOWN_SAMPLE_VALIDATION.md)의 범위에서 확인했다. 일반 문서 인식 품질·CPU 전체 문서·다양한 DPI는 추가 평가한다.
 - 사용자 사전은 [사용법](docs/USER_DICTIONARY.md)을 따른다. `user_data/`는 Git에서 제외한다. 작업 시작 시 사전을 고정하고 이름·버전·내용 식별값과 비교 결과를 기록한다. 사전은 PP-OCRv5 Kiwi 보정에만 적용하며 원문 글자·문단·편집본을 변경하지 않는다. 충돌 표기는 거부하고 겹치는 이름은 확인 대상으로 남긴다. 재보정은 새 출력 폴더·별도 비교 창을 사용한다.
 - 커밋과 PR은 하나의 변경 목적을 중심으로 구성하고 변경 이유와 검증 결과를 적는다.

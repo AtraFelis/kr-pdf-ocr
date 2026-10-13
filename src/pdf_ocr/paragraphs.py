@@ -97,17 +97,21 @@ def join_lines(previous: str, following: str):
     return " ", False
 
 
-def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
+def restore_paragraphs(
+    lines: list[dict], exclude_hanja: bool = True, allow_partial: bool = True
+) -> dict:
     """OCR 줄 좌표로 단일 본문 문단을 복원하고 모호한 연결을 기록한다.
 
     Args:
         lines: text와 선택적 픽셀 polygon을 포함한 원시 줄 목록.
         exclude_hanja: 명확한 한국어 병기 한자를 최종 텍스트에서 제외할지 여부.
+        allow_partial: 드문 겹침 영역을 보존하고 정상 구간만 복원할지 여부.
 
     Returns:
         text, paragraphs, reviews와 좌표 복원 여부 geometry_applied를 담은 사전.
         같은 줄 끝의 작은 닫는 문장부호만 연결한 뒤 좌표를 검사한다.
-        좌표가 없거나 영역이 겹치면 기존 줄 순서·형태를 보존한다.
+        좌표 누락·광범위한 겹침은 기존 순서·형태를 보존한다.
+        드문 겹침은 모호한 블록을 그대로 두고 정상 구간만 부분 복원한다.
 
     Raises:
         ValueError: 제공된 OCR 영역의 너비나 높이가 유효하지 않은 경우.
@@ -166,7 +170,19 @@ def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
         b - a for a, b in pairwise(centers) if height * 0.5 < b - a <= height * 2
     ]
     pitch = median(pitches) if pitches else height * 1.4
-    if any(b - a < height * 0.5 for a, b in pairwise(centers)):
+    overlaps = {
+        position
+        for i, (a, b) in enumerate(pairwise(centers))
+        if b - a < height * 0.5
+        for position in (i, i + 1)
+    }
+    if overlaps:
+        if (
+            allow_partial
+            and len(overlaps) <= 4
+            and len(overlaps) / len(entries) <= 0.25
+        ):
+            return restore_partial(lines, entries, overlaps, exclude_hanja)
         return {
             "text": "\n".join(x["text"] for x in original_entries),
             "paragraphs": [],
@@ -218,4 +234,77 @@ def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
         "paragraphs": paragraphs,
         "reviews": reviews,
         "geometry_applied": True,
+    }
+
+
+def restore_partial(
+    lines: list[dict], entries: list[dict], overlaps: set[int], exclude_hanja: bool
+) -> dict:
+    """드문 겹침 블록은 원문 줄로 보존하고 나머지 연속 구간만 좌표 복원한다.
+
+    raw lines·좌표·글자는 변경하지 않는다. 정상 구간의 로컬 줄 인덱스를
+    원래 페이지 인덱스로 매핑하고 겹침 문단은 Kiwi 적용 제외로 표시한다.
+    다단처럼 겹침이 많으면 호출하지 않으며 누락 좌표는 기존 보존 정책을 따른다.
+    """
+    groups = []
+    for position, entry in enumerate(entries):
+        ambiguous = position in overlaps
+        if not groups or groups[-1][0] != ambiguous:
+            groups.append((ambiguous, []))
+        groups[-1][1].extend(entry["line_indices"])
+    paragraphs, reviews = [], []
+    for ambiguous, original_indices in groups:
+        indices = sorted(set(original_indices))
+        if ambiguous:
+            texts = [
+                remove_hanja_annotations(lines[i]["text"].strip())
+                if exclude_hanja
+                else lines[i]["text"].strip()
+                for i in indices
+            ]
+            paragraphs.append(
+                {
+                    "text": "\n".join(texts),
+                    "line_indices": indices,
+                    "geometry_applied": False,
+                }
+            )
+            reviews.append(
+                {"reason": "overlapping_region_preserved", "line_indices": indices}
+            )
+            continue
+        restored = restore_paragraphs(
+            [lines[i] for i in indices], exclude_hanja, allow_partial=False
+        )
+        if not restored["geometry_applied"]:
+            paragraphs.append(
+                {
+                    "text": restored["text"],
+                    "line_indices": indices,
+                    "geometry_applied": False,
+                }
+            )
+        else:
+            paragraphs.extend(
+                {
+                    **paragraph,
+                    "line_indices": [indices[i] for i in paragraph["line_indices"]],
+                    "geometry_applied": True,
+                }
+                for paragraph in restored["paragraphs"]
+            )
+        for review in restored["reviews"]:
+            mapped = dict(review)
+            if "line_index" in mapped:
+                mapped["line_index"] = indices[mapped["line_index"]]
+            if "line_indices" in mapped:
+                mapped["line_indices"] = [indices[i] for i in mapped["line_indices"]]
+            reviews.append(mapped)
+    applied = any(paragraph.get("geometry_applied") for paragraph in paragraphs)
+    return {
+        "text": "\n\n".join(p["text"] for p in paragraphs),
+        "paragraphs": paragraphs,
+        "reviews": reviews,
+        "geometry_applied": applied,
+        "partial_geometry_applied": applied,
     }
