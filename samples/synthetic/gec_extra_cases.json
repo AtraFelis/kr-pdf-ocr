@@ -1,0 +1,75 @@
+[
+  {
+    "id": "ocr-like-01",
+    "category": "character",
+    "source": "그는 훌륨한 연주를 들려주었다.",
+    "reference": "그는 훌륭한 연주를 들려주었다."
+  },
+  {
+    "id": "ocr-like-02",
+    "category": "character",
+    "source": "오늘도 고맙슴니다.",
+    "reference": "오늘도 고맙습니다."
+  },
+  {
+    "id": "ocr-like-03",
+    "category": "spacing",
+    "source": "제조사 에 수리를 요청했다.",
+    "reference": "제조사에 수리를 요청했다."
+  },
+  {
+    "id": "ocr-like-04",
+    "category": "spacing",
+    "source": "그녀의팔을조심스럽게잡았다.",
+    "reference": "그녀의 팔을 조심스럽게 잡았다."
+  },
+  {
+    "id": "ocr-like-05",
+    "category": "punctuation",
+    "source": "그는 고개를 끄덕였다",
+    "reference": "그는 고개를 끄덕였다."
+  },
+  {
+    "id": "ocr-like-06",
+    "category": "proper_name",
+    "source": "아르델린은 훌륨한 기사였다.",
+    "reference": "아르델린은 훌륭한 기사였다.",
+    "protected": [
+      "아르델린"
+    ]
+  },
+  {
+    "id": "ocr-like-07",
+    "category": "normal",
+    "source": "싫다니까, 그만해.",
+    "reference": "싫다니까, 그만해."
+  },
+  {
+    "id": "ocr-like-08",
+    "category": "normal",
+    "source": "…… 정말?",
+    "reference": "…… 정말?"
+  },
+  {
+    "id": "ocr-like-09",
+    "category": "proper_name",
+    "source": "윤서담은 푸른여울 도서관에 갔다.",
+    "reference": "윤서담은 푸른여울 도서관에 갔다.",
+    "protected": [
+      "윤서담",
+      "푸른여울"
+    ]
+  },
+  {
+    "id": "ocr-like-10",
+    "category": "numbers_english",
+    "source": "2026년 10월, PDF 1.6 파일을 열었다.",
+    "reference": "2026년 10월, PDF 1.6 파일을 열었다.",
+    "protected": [
+      "2026",
+      "10",
+      "PDF",
+      "1.6"
+    ]
+  }
+]

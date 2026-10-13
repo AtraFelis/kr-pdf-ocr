@@ -74,6 +74,12 @@ python -m venv .venv
 .\.venv\Scripts\python.exe scripts/download_gec_model.py
 .\.venv\Scripts\python.exe scripts/evaluate_gec.py --device cpu --output "output/gec-cpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv\Scripts\python.exe scripts/evaluate_gec.py --device gpu --output "output/gec-gpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# KoGEC 공개 가중치와 진단 전용 조건: 정식 교정 토큰 매핑 미확인, 앱에 미연결
+.\.venv\Scripts\python.exe scripts/download_kogec_models.py --model 600m
+.\.venv\Scripts\python.exe scripts/download_kogec_models.py --model 3.3b
+# 명시적인 GPU 진단: 기본 합성 20개. 실제 사례는 --cases로 로컬 JSON 지정
+.\.venv\Scripts\python.exe scripts/probe_kogec.py --model 600m --diagnostic-only --output "output/kogec-600m-$(Get-Date -Format yyyyMMdd-HHmmss)"
+.\.venv\Scripts\python.exe scripts/probe_kogec.py --model 3.3b --diagnostic-only --output "output/kogec-33b-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 데스크톱 화면 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.gui
 # 검증

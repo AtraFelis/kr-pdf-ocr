@@ -39,6 +39,7 @@
 - [PR #8 CodeRabbit 리뷰 반영](history/CODERABBIT_PR8.md)
 - [한국어 문자 교정 도입 계획](history/TEXT_CORRECTION_PLAN.md)
 - [gec_kr CPU/GPU 첫 비교 결과](history/GEC_EVALUATION.md)
+- [KoGEC 공개 파일 정합성·제한된 GPU 진단](history/KOGEC_CHECKPOINT.md)
 - [오류 샘플의 보정 중단 수정](history/OCR_ERROR_SAMPLE.md)
 - [인용문 여는 부호의 공백 수정](history/QUOTE_SPACING.md)
 - [짧은 대사·문장부호 재인식 검증](history/SHORT_TEXT_RETRY.md)
