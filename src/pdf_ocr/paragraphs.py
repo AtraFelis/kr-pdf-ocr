@@ -97,6 +97,34 @@ def join_lines(previous: str, following: str):
     return " ", False
 
 
+def is_short_ending_continuation(previous, current, left, right, height, pitch):
+    """본문 끝의 제한된 한국어 어미 조각과 정상 배치가 모두 맞을 때만 연결한다.
+
+    `웃었/다.` 같은 어미는 검출 영역 높이 오차로 분리될 수 있다. 앞줄이
+    충분히 길고 다음 줄이 본문 왼쪽의 작은 영역이며 정상 줄 간격·유사 높이를
+    가질 때만 인정한다. 제목·들여쓰기·큰 간격을 완화하지 않으며 글자를 바꾸지 않는다.
+    좌표·높이·간격은 같은 입력 이미지의 픽셀 단위다.
+    """
+    if not re.search(r"[가-힣][았었였겠했됐이]$", previous["text"]):
+        return False
+    if not re.fullmatch(r"다[.!?…。！？]*[\"'”’」』)]*", current["text"]):
+        return False
+    previous_height = previous["bottom"] - previous["top"]
+    current_height = current["bottom"] - current["top"]
+    gap = (
+        current["top"] + current["bottom"] - previous["top"] - previous["bottom"]
+    ) / 2
+    return (
+        previous["right"] >= left + 0.8 * (right - left)
+        and current["left"] <= left + height * 0.45
+        and abs(current["left"] - previous["left"]) <= height * 1.5
+        and current["right"] - current["left"] <= height * 2.5
+        and gap <= pitch * 1.6
+        and max(previous_height, current_height) / min(previous_height, current_height)
+        <= 1.6
+    )
+
+
 def restore_paragraphs(
     lines: list[dict], exclude_hanja: bool = True, allow_partial: bool = True
 ) -> dict:
@@ -205,11 +233,14 @@ def restore_paragraphs(
             max(previous_height, current_height) / min(previous_height, current_height)
             > 1.3
         )
+        short_ending = is_short_ending_continuation(
+            previous, current, left, right, height, pitch
+        )
         boundary = (
             gap > pitch * 1.6
             or short_line
             or indented
-            or style_change
+            or (style_change and not short_ending)
             or LIST_START.match(current["text"])
             or LIST_START.match(previous["text"])
         )
@@ -218,9 +249,23 @@ def restore_paragraphs(
                 {"text": current["text"], "line_indices": current["line_indices"][:]}
             )
         else:
-            separator, uncertain = join_lines(previous["text"], current["text"])
+            separator, uncertain = (
+                ("", False)
+                if short_ending
+                else join_lines(previous["text"], current["text"])
+            )
             paragraphs[-1]["text"] += separator + current["text"]
             paragraphs[-1]["line_indices"].extend(current["line_indices"])
+            if short_ending:
+                reviews.append(
+                    {
+                        "line_indices": previous["line_indices"]
+                        + current["line_indices"],
+                        "reason": "short_ending_continuation",
+                        "requires_review": True,
+                        "separator": "",
+                    }
+                )
             if uncertain:
                 reviews.append(
                     {

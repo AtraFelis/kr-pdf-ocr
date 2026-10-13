@@ -62,6 +62,63 @@ def test_title_and_list_are_preserved():
     assert result["text"] == "제목\n\n본문 문장.\n\n1. 목록 하나\n\n2. 목록 둘"
 
 
+@pytest.mark.parametrize(
+    "previous,ending,expected",
+    [
+        ("모두 함께 웃었", "다.", "모두 함께 웃었다."),
+        ("그는 대답했", "다.”", "그는 대답했다.”"),
+        ("그 사람은 학생이", "다", "그 사람은 학생이다"),
+    ],
+)
+def test_short_ending_height_error_keeps_single_paragraph(previous, ending, expected):
+    """높이 비율 1.34의 짧은 어미를 연결하되 원시 좌표·글자·인덱스는 보존한다."""
+    import copy
+
+    lines = [line(previous, 0, height=32), line(ending, 45, right=53, height=43)]
+    original = copy.deepcopy(lines)
+    result = restore_paragraphs(lines)
+    assert result["text"] == expected
+    assert result["paragraphs"][0]["line_indices"] == [0, 1]
+    assert result["reviews"][0]["reason"] == "short_ending_continuation"
+    assert result["reviews"][0]["requires_review"]
+    assert lines == original
+
+
+@pytest.mark.parametrize(
+    "previous,current",
+    [
+        (line("앞 문장을 마쳤다.", 0, height=32), line("다.", 45, right=53, height=43)),
+        (line("주인공이 웃었", 0, height=32), line("다. 다음 이야기", 45, height=43)),
+        (line("주인공이 웃었", 0, height=32), line("다.", 150, right=53, height=43)),
+        (
+            line("주인공이 웃었", 0, height=32),
+            line("다.", 45, left=50, right=93, height=43),
+        ),
+        (line("주인공이 웃었", 0, height=20), line("다.", 45, right=53, height=43)),
+        (line("1. 주인공이 웃었", 0, height=32), line("다.", 45, right=53, height=43)),
+    ],
+)
+def test_short_ending_does_not_override_real_boundaries(previous, current):
+    """종결·다른 문장·큰 간격·들여쓰기·큰 글꼴·목록의 실제 경계를 유지한다."""
+    result = restore_paragraphs([previous, current])
+    assert len(result["paragraphs"]) == 2
+    assert not any(
+        r["reason"] == "short_ending_continuation" for r in result["reviews"]
+    )
+
+
+def test_short_previous_line_still_ends_paragraph():
+    """앞줄 자체가 짧으면 어미처럼 보이는 다음 영역도 임의로 합치지 않는다."""
+    lines = [
+        line("이야기는 끝났", 0, right=120, height=32),
+        line("다.", 45, right=53, height=43),
+        line("독립적인 본문이다.", 100, right=300, height=32),
+    ]
+    result = restore_paragraphs(lines)
+    assert result["paragraphs"][0]["line_indices"] == [0]
+    assert result["paragraphs"][1]["line_indices"] == [1]
+
+
 def test_page_result_without_geometry_is_not_reflowed():
     """좌표 없는 모델 출력의 기존 문단을 다시 연결하지 않는지 확인한다."""
     result = restore_paragraphs([{"text": "문단 하나\n\n문단 둘", "polygon": None}])
