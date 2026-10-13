@@ -1,7 +1,9 @@
-"""PDF image display with zoom-independent rectangular selections."""
+"""PDF 미리보기에서 상대 좌표의 추출·재인식 영역과 실제 검출 다각형을 표시한다."""
+
+import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QWidget
 
 from .selection import Region
@@ -11,12 +13,16 @@ class PagePreview(QWidget):
     """확대율과 무관한 상대 영역을 선택할 수 있는 PDF 이미지 위젯이다."""
 
     region_changed = Signal(object)
+    retry_region_changed = Signal(object)
 
     def __init__(self, parent=None):
         """빈 이미지·전체 영역·드래그 상태와 미리보기 위젯의 초기 크기를 설정한다."""
         super().__init__(parent)
         self.pixmap = QPixmap()
         self.region = Region()
+        self.retry_region = None
+        self.retry_mode = False
+        self.polygons = []
         self.zoom = 1.0
         self.drag_start = None
         self.drag_end = None
@@ -54,6 +60,26 @@ class PagePreview(QWidget):
     def clear_image(self):
         """이전 페이지 이미지와 진행 중 드래그를 비우고 다시 그린다."""
         self.pixmap = QPixmap()
+        self.drag_start = self.drag_end = None
+        self.retry_region = None
+        self.polygons = []
+        self.update()
+
+    def set_polygons(self, polygons):
+        """원시 OCR의 전체 페이지 상대 다각형을 표시용으로 복사한다."""
+        for polygon in polygons:
+            if len(polygon) < 3 or any(
+                not math.isfinite(value) or not 0 <= value <= 1
+                for point in polygon
+                for value in point
+            ):
+                raise ValueError("검출 다각형은 유한한 0~1 상대 좌표여야 합니다.")
+        self.polygons = [[QPointF(x, y) for x, y in polygon] for polygon in polygons]
+        self.update()
+
+    def set_retry_mode(self, enabled):
+        """드래그 대상을 재인식으로 전환하며 기존 추출 영역은 유지한다."""
+        self.retry_mode = enabled
         self.drag_start = self.drag_end = None
         self.update()
 
@@ -98,13 +124,18 @@ class PagePreview(QWidget):
             abs(start.x() - end.x()) * self.image_rect().width() >= 3
             and abs(start.y() - end.y()) * self.image_rect().height() >= 3
         ):
-            self.region = Region(
+            region = Region(
                 min(start.x(), end.x()),
                 min(start.y(), end.y()),
                 max(start.x(), end.x()),
                 max(start.y(), end.y()),
             )
-            self.region_changed.emit(self.region)
+            if self.retry_mode:
+                self.retry_region = region
+                self.retry_region_changed.emit(region)
+            else:
+                self.region = region
+                self.region_changed.emit(region)
         self.update()
 
     def paintEvent(self, event):
@@ -122,7 +153,23 @@ class PagePreview(QWidget):
         target = self.image_rect()
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         painter.drawPixmap(target, self.pixmap, QRectF(self.pixmap.rect()))
-        region = self.region
+        painter.setPen(QPen(QColor("#13845b"), 1))
+        for polygon in self.polygons:
+            painter.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(
+                            target.left() + p.x() * target.width(),
+                            target.top() + p.y() * target.height(),
+                        )
+                        for p in polygon
+                    ]
+                )
+            )
+        region = self.retry_region if self.retry_mode else self.region
+        if region is None and self.drag_start is None:
+            return
+        region = region or Region()
         relative = QRectF(
             region.left,
             region.top,

@@ -50,6 +50,7 @@ from .markdown_export import MarkdownPreview, save_markdown
 from .model_info import MODEL_GUIDES, ModelInfoDialog
 from .pdf import page_count, render_pages
 from .preview import PagePreview
+from .region_retry_ui import RegionRetryDialog
 from .retry_ui import RetryDialog
 from .selection import Region, select_pages
 
@@ -222,6 +223,18 @@ class OCRWindow(QMainWindow):
         self.device.addItem("CPU", "cpu")
         self.device.addItem("GPU · NVIDIA", "gpu")
         side.addWidget(self.device)
+        dpi_row = QHBoxLayout()
+        dpi_row.addWidget(QLabel("OCR 해상도(DPI)"))
+        self.dpi = QComboBox()
+        self.dpi.setAccessibleName("OCR 해상도(DPI)")
+        for value in (200, 300, 400, 600):
+            self.dpi.addItem(str(value), value)
+        self.dpi.setCurrentIndex(self.dpi.findData(300))
+        self.dpi.setToolTip(
+            "높이면 작은 글자에 유리할 수 있지만 시간·메모리가 늘어납니다. 미리보기 배율과 별개입니다."
+        )
+        dpi_row.addWidget(self.dpi)
+        side.addLayout(dpi_row)
         self.device_notice = QLabel()
         self.device_notice.setWordWrap(True)
         self.device_notice.setSizePolicy(
@@ -249,6 +262,9 @@ class OCRWindow(QMainWindow):
         detection_row.addWidget(self.det_box_thresh)
         side.addLayout(detection_row)
         side.addWidget(self.device_notice)
+        defaults = QPushButton("OCR 설정 기본값 복원")
+        defaults.clicked.connect(self.reset_ocr_settings)
+        side.addWidget(defaults)
         self.repair = QCheckBox("한국어 띄어쓰기 보정 제안")
         self.repair.setChecked(True)
         side.addWidget(self.repair)
@@ -307,9 +323,21 @@ class OCRWindow(QMainWindow):
         )
         top.addWidget(self.zoom)
         middle.addLayout(top)
+        recognition_tools = QHBoxLayout()
+        self.show_detection = QCheckBox("검출 영역 표시")
+        self.show_detection.toggled.connect(self.update_detection_overlay)
+        recognition_tools.addWidget(self.show_detection)
+        self.retry_selection = QCheckBox("재인식 영역 선택")
+        self.retry_selection.toggled.connect(self.set_retry_selection)
+        recognition_tools.addWidget(self.retry_selection)
+        self.region_retry_button = QPushButton("선택 영역 재인식")
+        self.region_retry_button.clicked.connect(self.open_region_retry)
+        recognition_tools.addWidget(self.region_retry_button)
+        middle.addLayout(recognition_tools)
         middle.addWidget(QLabel("마우스로 드래그해 가져올 영역을 선택하세요."))
         self.preview = PagePreview()
         self.preview.region_changed.connect(self.selection_changed)
+        self.preview.retry_region_changed.connect(self.retry_selection_changed)
         scroll = QScrollArea()
         scroll.setObjectName("previewScroll")
         scroll.setWidget(self.preview)
@@ -412,6 +440,15 @@ class OCRWindow(QMainWindow):
         self.open_button.setEnabled(not busy)
         self.sidebar.setEnabled(not busy)
         self.preview.setEnabled(not busy)
+        self.show_detection.setEnabled(not busy)
+        self.retry_selection.setEnabled(
+            editable_region and self.output_format.currentData() == "txt"
+        )
+        self.region_retry_button.setEnabled(
+            editable_region
+            and self.output_format.currentData() == "txt"
+            and self.preview.retry_region is not None
+        )
         self.apply_region_button.setEnabled(editable_region)
         self.reset_region_button.setEnabled(editable_region)
         for field in self.coordinates:
@@ -466,6 +503,10 @@ class OCRWindow(QMainWindow):
             else "TXT에서는 표 구조와 이미지가 보존되지 않을 수 있습니다."
         )
         self.update_spacing_option()
+        if hasattr(self, "retry_selection"):
+            if markdown:
+                self.retry_selection.setChecked(False)
+            self.set_busy(self.running())
         if hasattr(self, "keep_hanja"):
             self.keep_hanja.setEnabled(not markdown)
             self.keep_hanja.setToolTip(
@@ -674,7 +715,7 @@ class OCRWindow(QMainWindow):
             return
         self.preview.clear_image()
         try:
-            # Preview DPI is separate from the OCR's 300 DPI; regions are normalized.
+            # Preview DPI is separate from the selected OCR DPI; regions are normalized.
             for _, image in render_pages(self.pdf_path, [index + 1], 96):
                 self.preview_size = image.size
                 self.preview.set_image(image)
@@ -688,7 +729,73 @@ class OCRWindow(QMainWindow):
             f"미리보기 기준 픽셀 좌표 · {self.preview_size[0]} × {self.preview_size[1]}"
         )
         self.set_current_region(self.regions.get(index + 1, Region()))
+        self.update_detection_overlay()
         self.set_busy(self.running())
+
+    def reset_ocr_settings(self):
+        """다음 OCR의 DPI와 검출 기준만 기본값으로 되돌리고 결과는 유지한다."""
+        self.dpi.setCurrentIndex(self.dpi.findData(300))
+        self.det_box_thresh.setValue(DEFAULT_DET_BOX_THRESH)
+
+    def update_detection_overlay(self):
+        """현재 결과 페이지의 실제 원시 좌표만 미리보기 상대 다각형으로 표시한다."""
+        self.preview.set_polygons([])
+        folder = self.result_folder
+        if not self.show_detection.isChecked() or folder is None:
+            return
+        path = folder / f"page-{self.page_list.currentRow() + 1:03}.json"
+        if not path.is_file():
+            return
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            polygons = []
+            for line in record.get("lines", []):
+                polygon = line.get("polygon")
+                if polygon:
+                    polygons.append(
+                        [
+                            [x / record["width"], y / record["height"]]
+                            for x, y in polygon
+                        ]
+                    )
+            self.preview.set_polygons(polygons)
+            if not polygons:
+                self.status.setText(
+                    "이 결과는 줄 좌표를 제공하지 않아 검출 영역을 표시하지 않습니다."
+                )
+        except (OSError, ValueError, KeyError, TypeError, ZeroDivisionError) as error:
+            self.status.setText(f"검출 영역을 읽지 못했습니다: {error}")
+
+    def set_retry_selection(self, enabled):
+        """미리보기 드래그를 재인식 모드로 전환하며 추출 영역 설정은 보존한다."""
+        self.preview.set_retry_mode(enabled)
+        self.status.setText(
+            "다시 읽을 영역을 드래그한 뒤 선택 영역 재인식을 누르세요. 추출 범위는 유지됩니다."
+            if enabled
+            else "드래그로 PDF 추출 영역을 선택합니다."
+        )
+
+    def retry_selection_changed(self, region):
+        """재인식 전용 선택이 끝나면 페이지·영역 작업 버튼을 활성화한다."""
+        self.set_busy(self.running())
+
+    def open_region_retry(self):
+        """현재 PDF의 명시적 선택 영역을 별도 TXT 후보로 읽는 비교 창을 연다."""
+        if self.running() or self.pdf_path is None or self.preview.retry_region is None:
+            return
+        if self.output_format.currentData() != "txt":
+            return
+        RegionRetryDialog(
+            self.root,
+            self.pdf_path,
+            self.page_list.currentRow() + 1,
+            self.preview.retry_region,
+            self.dpi.currentData(),
+            self.device.currentData(),
+            self.det_box_thresh.value(),
+            self.model.currentData(),
+            self,
+        ).exec()
 
     def set_current_region(self, region):
         """상대 영역을 미리보기와 기준 이미지의 픽셀 좌표 입력란에 반영한다."""
@@ -798,6 +905,8 @@ class OCRWindow(QMainWindow):
             self.model.currentData(),
             "--device",
             self.device.currentData(),
+            "--dpi",
+            str(self.dpi.currentData()),
             "--output",
             str(self.run_folder),
             "--format",
@@ -831,6 +940,7 @@ class OCRWindow(QMainWindow):
         self.job_kind = "ocr"
         self.completed = set()
         self.log_buffer = ""
+        self.preview.set_polygons([])
         self.editor.clear()
         self.editor.document().setModified(False)
         self.progress.setRange(0, len(pages))
@@ -994,6 +1104,7 @@ class OCRWindow(QMainWindow):
             except (OSError, ValueError) as error:
                 QMessageBox.warning(self, "결과 읽기 실패", str(error))
         self.set_busy(False)
+        self.update_detection_overlay()
         if self.cancelled:
             self.status.setText(
                 f"취소됨 · 완료된 {len(self.completed)}페이지의 결과 보존"
