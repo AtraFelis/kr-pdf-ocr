@@ -5,6 +5,33 @@ import re
 from .dictionary import UserDictionary
 
 
+def separate_korean_quote_boundaries(text: str) -> str:
+    """짝이 맞는 한글 인용문의 여는 부호 앞에만 공백을 넣고 부호·조사를 보존한다.
+
+    인용문이 한글로 시작하고 바로 앞 글자도 한글일 때만 적용한다. ASCII와
+    곡선 따옴표의 혼용은 허용하지만 짝 없는 부호·영문 아포스트로피는 건드리지
+    않는다. 닫는 부호 뒤에 붙은 조사와 인용문 내부의 공백은 그대로 둔다.
+    """
+    patterns = (
+        r"['‘]([^'‘’\n]*)['’]",
+        r'["“]([^"“”\n]*)["”]',
+        r"「([^「」\n]*)」",
+        r"『([^『』\n]*)』",
+    )
+    positions = set()
+    for pattern in patterns:
+        for match in re.finditer(pattern, text):
+            if (
+                match.start() > 0
+                and re.fullmatch(r"[가-힣]", text[match.start() - 1])
+                and re.match(r"[가-힣]", match.group(1).lstrip())
+            ):
+                positions.add(match.start())
+    for position in sorted(positions, reverse=True):
+        text = text[:position] + " " + text[position:]
+    return text
+
+
 class LocalSpacingRepair:
     """Local suggestions constrained to whitespace-only edits."""
 
@@ -20,7 +47,7 @@ class LocalSpacingRepair:
                 self.kiwi.add_user_word(word, tag="NNP", score=0.0)
 
     def repair(self, result: dict) -> dict:
-        """복원된 문단의 공백만 보정하고 변경 전후 제안을 기록한다.
+        """문단의 공백과 한글 인용 시작 경계를 보정하고 변경 전후 제안을 기록한다.
 
         Args:
             result: geometry_applied, paragraphs, reviews를 포함한 문단 복원 결과.
@@ -40,12 +67,16 @@ class LocalSpacingRepair:
         reviews = list(result["reviews"])
         for index, paragraph in enumerate(result["paragraphs"]):
             before = paragraph["text"]
-            after = self.kiwi.space(before, reset_whitespace=True)
+            after = separate_korean_quote_boundaries(
+                self.kiwi.space(before, reset_whitespace=True)
+            )
             baseline_model = getattr(self, "baseline", self.kiwi)
             baseline = (
                 after
                 if baseline_model is self.kiwi
-                else baseline_model.space(before, reset_whitespace=True)
+                else separate_korean_quote_boundaries(
+                    baseline_model.space(before, reset_whitespace=True)
+                )
             )
             if any(
                 re.sub(r"\s", "", before) != re.sub(r"\s", "", value)
@@ -94,5 +125,6 @@ class LocalSpacingRepair:
                     else None
                 ),
                 "user_word_score": 0.0,
+                "korean_quote_boundaries": True,
             },
         }

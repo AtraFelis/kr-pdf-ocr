@@ -36,6 +36,7 @@
 - [PR #8 CodeRabbit 리뷰 반영](history/CODERABBIT_PR8.md)
 - [한국어 문자 교정 도입 계획](history/TEXT_CORRECTION_PLAN.md)
 - [오류 샘플의 보정 중단 수정](history/OCR_ERROR_SAMPLE.md)
+- [인용문 여는 부호의 공백 수정](history/QUOTE_SPACING.md)
 - [구조화 Markdown 첫 연결 기록](history/STRUCTURED_MARKDOWN_IMPLEMENTATION.md)
 - [모델 정보 아이콘 구현 기록](history/MODEL_INFO_IMPLEMENTATION.md)
 - [사용자 사전 구현·품질 확인](history/USER_DICTIONARY_IMPLEMENTATION.md)
