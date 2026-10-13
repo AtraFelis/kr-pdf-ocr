@@ -38,6 +38,20 @@ def test_generated_page_without_geometry_is_preserved(repairer):
     assert repairer.repair(result) == result
 
 
+def test_detached_quote_page_is_eligible_for_real_spacing(repairer):
+    """작은 닫는 따옴표를 연결한 페이지에도 실제 Kiwi를 적용하고 글자를 보존한다."""
+    lines = [
+        {"text": "지금나는공부한다", "polygon": [[0, 0], [300, 0], [300, 50], [0, 50]]},
+        {"text": "”", "polygon": [[298, 6], [311, 6], [311, 19], [298, 19]]},
+    ]
+    restored = restore_paragraphs(lines)
+    repaired = repairer.repair(restored)
+    assert repaired["geometry_applied"]
+    assert "spacing" in repaired
+    assert repaired["text"] != restored["text"]
+    assert re.sub(r"\s", "", repaired["text"]) == "지금나는공부한다”"
+
+
 def test_non_whitespace_edits_are_rejected():
     """보정 모델이 공백 외 글자를 바꾸면 적용을 중단하는지 확인한다."""
 

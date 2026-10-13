@@ -90,3 +90,55 @@ def test_empty_lines_and_invalid_geometry():
     assert restore_paragraphs([])["text"] == ""
     with pytest.raises(ValueError):
         restore_paragraphs([line("본문", 0, height=0)])
+
+
+def test_detached_small_closing_quote_does_not_disable_page():
+    """같은 줄의 작은 닫는 따옴표를 연결해 페이지 복원을 유지하고 원시 줄을 보존한다."""
+    import copy
+
+    lines = [
+        line("첫본문은", 0, right=300, height=50),
+        line("여기에계속된다.", 70, right=300, height=50),
+        line("끝이다", 140, right=150, height=50),
+        line("”", 146, left=148, right=161, height=13),
+    ]
+    original = copy.deepcopy(lines)
+    result = restore_paragraphs(lines)
+    assert result["geometry_applied"]
+    assert result["text"].endswith("끝이다”")
+    assert result["paragraphs"][-1]["line_indices"] == [0, 1, 2, 3]
+    assert lines == original
+    assert any(
+        review == {"reason": "attached_closing_punctuation", "line_indices": [2, 3]}
+        for review in result["reviews"]
+    )
+
+
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        line("”", 6, left=400, right=413, height=13),
+        line("”", 6, left=100, right=113, height=13),
+        line("”", 6, left=298, right=311, height=50),
+        line("“", 6, left=298, right=311, height=13),
+        line("x", 6, left=298, right=311, height=13),
+    ],
+)
+def test_ambiguous_or_unrelated_fragment_keeps_original_layout(fragment):
+    """멀거나 크거나 내부·여는 부호·문자인 영역은 추측 연결하지 않는다."""
+    lines = [line("본문", 0, height=50), fragment]
+    result = restore_paragraphs(lines)
+    assert not result["geometry_applied"]
+    assert result["text"] == "본문\n" + fragment["text"]
+
+
+def test_fragment_with_two_hosts_does_not_merge_columns():
+    """문장부호가 두 본문 후보에 걸치면 다단 복원을 생략하고 원래 순서를 지킨다."""
+    lines = [
+        line("첫영역", 0, right=300, height=50),
+        line("다른영역", 5, left=250, right=305, height=50),
+        line("”", 10, left=304, right=317, height=13),
+    ]
+    result = restore_paragraphs(lines)
+    assert not result["geometry_applied"]
+    assert result["text"] == "첫영역\n다른영역\n”"
