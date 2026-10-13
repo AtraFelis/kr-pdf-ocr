@@ -19,6 +19,8 @@ def retry_reason(line: dict) -> str | None:
         return "low_score"
     if compact.endswith(("다", "요", "죠", "까", "니")):
         return "possible_missing_punctuation"
+    if any(mark in compact for mark in "\"'“”‘’…"):
+        return "quotation_or_ellipsis"
     return None
 
 

@@ -39,6 +39,7 @@
 - [오류 샘플의 보정 중단 수정](history/OCR_ERROR_SAMPLE.md)
 - [인용문 여는 부호의 공백 수정](history/QUOTE_SPACING.md)
 - [짧은 대사·문장부호 재인식 검증](history/SHORT_TEXT_RETRY.md)
+- [실제 짧은 대사 오류의 VLM 재인식](history/VISUAL_RETRY_ERRORS.md)
 - [구조화 Markdown 첫 연결 기록](history/STRUCTURED_MARKDOWN_IMPLEMENTATION.md)
 - [모델 정보 아이콘 구현 기록](history/MODEL_INFO_IMPLEMENTATION.md)
 - [사용자 사전 구현·품질 확인](history/USER_DICTIONARY_IMPLEMENTATION.md)
