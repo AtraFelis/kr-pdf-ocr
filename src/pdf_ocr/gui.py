@@ -237,6 +237,11 @@ class OCRWindow(QMainWindow):
             "PP-OCRv5 TXT에서 영역을 두 조건으로 다시 읽습니다. 원문을 확인한 뒤 후보를 선택하세요. 처리 시간이 늘어납니다."
         )
         side.addWidget(self.retry_short)
+        self.join_pages = QCheckBox("페이지 사이 문단 연결 · 확인 필요")
+        self.join_pages.setToolTip(
+            "PP-OCRv5 TXT의 연속 페이지 본문을 연결합니다. 머리말·쪽번호는 영역에서 제외하세요. 모호한 단어 경계는 확인이 필요합니다."
+        )
+        side.addWidget(self.join_pages)
         self.repair.setToolTip(
             "글자는 유지하며 공백만 보정합니다. 고유명사 등은 원문 확인이 필요합니다."
         )
@@ -444,12 +449,16 @@ class OCRWindow(QMainWindow):
             )
 
     def update_spacing_option(self):
-        """선택 모델에 맞춰 Kiwi 보정 사용 가능 여부와 안내를 갱신한다."""
+        """모델·출력 형식에 맞춰 Kiwi·재인식·페이지 연결·사전 옵션을 갱신한다."""
         self.repair.setEnabled(
             self.model.currentData() == "paddle"
             and self.output_format.currentData() == "txt"
         )
         self.retry_short.setEnabled(
+            self.model.currentData() == "paddle"
+            and self.output_format.currentData() == "txt"
+        )
+        self.join_pages.setEnabled(
             self.model.currentData() == "paddle"
             and self.output_format.currentData() == "txt"
         )
@@ -769,6 +778,12 @@ class OCRWindow(QMainWindow):
         if self.keep_hanja.isChecked() and self.result_format == "txt":
             args.append("--keep-hanja")
         if (
+            self.join_pages.isChecked()
+            and self.model.currentData() == "paddle"
+            and self.result_format == "txt"
+        ):
+            args.append("--join-pages")
+        if (
             self.retry_short.isChecked()
             and self.model.currentData() == "paddle"
             and self.result_format == "txt"
@@ -836,6 +851,8 @@ class OCRWindow(QMainWindow):
             args.extend(["--dictionary", str(snapshot)])
         if self.keep_hanja.isChecked():
             args.append("--keep-hanja")
+        if self.join_pages.isChecked():
+            args.append("--join-pages")
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONIOENCODING", "utf-8")
         self.process.setProcessEnvironment(environment)
@@ -890,7 +907,7 @@ class OCRWindow(QMainWindow):
             )
 
     def process_finished(self, code, status):
-        """완료된 결과·로그를 복구하고 정상 완료·취소·실패 상태를 구분해 표시한다."""
+        """결과·로그·페이지 연결/검토 수를 복구하고 완료·취소·실패 상태를 표시한다."""
         self.read_process_output()
         if self.job_kind == "reprocess":
             self.reprocess_finished(code, status)
@@ -908,8 +925,21 @@ class OCRWindow(QMainWindow):
                 for path in self.run_folder.glob("page-*.json"):
                     record = json.loads(path.read_text(encoding="utf-8"))
                     reviews += len((record.get("restoration") or {}).get("reviews", []))
+                connection_label = ""
+                connection_path = self.run_folder / "connections.json"
+                if connection_path.is_file() and self.result_format == "txt":
+                    connections = json.loads(
+                        connection_path.read_text(encoding="utf-8")
+                    )
+                    if connections.get("enabled"):
+                        boundaries = connections.get("boundaries", [])
+                        joined = sum(item["status"] == "joined" for item in boundaries)
+                        reviews += sum(
+                            bool(item.get("review_required")) for item in boundaries
+                        )
+                        connection_label = f"페이지 경계 연결 {joined}개 · "
                 self.review_label.setText(
-                    f"확인 항목 {reviews}개 · 인식 결과를 원문과 비교한 뒤 저장하세요."
+                    f"{connection_label}확인 항목 {reviews}개 · 인식 결과를 원문과 비교한 뒤 저장하세요."
                 )
                 if self.result_format == "md":
                     self.review_label.setText(

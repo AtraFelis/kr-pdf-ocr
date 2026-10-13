@@ -72,6 +72,8 @@ python -m venv .venv
 # 실제 Markdown OCR 호출·검증 상태는 docs/MARKDOWN_EXPORT.md 참조
 # 데스크톱 화면 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.gui
+# 페이지 연결: 저장 JSON 재처리, 새 출력 경로 사용
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/_archive/cleanup-20261013-150057/ocr-run-02 --repair-spacing --join-pages --output "output/connected-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 검증
 .\.venv\Scripts\python.exe scripts/check_docstrings.py
 .\.venv\Scripts\python.exe -m pytest --basetemp "output/pytest-$(Get-Date -Format yyyyMMdd-HHmmss-fff)"
@@ -79,7 +81,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m ruff format --check src scripts tests
 ```
 
-이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원·선택적 Kiwi 보정·데스크톱 화면이 구현되어 있다. 페이지 간 연결·배포 빌드는 아직 미구현이다.
+이 컴퓨터의 가상환경은 Codex에 포함된 Python 3.12로 생성했다. 전역 `python`이 없거나 다른 버전이면 Python 3.12 실행 파일의 전체 경로를 사용한다. VLM은 로컬 파일과 Transformers 내장 모델 코드만 사용한다. VLM이 제공하지 않는 줄별 좌표·신뢰도를 생성하지 않는다. 단일 본문 문단 복원·선택적 Kiwi 보정·데스크톱 화면이 구현되어 있다. 페이지 간 연결은 PP-OCRv5 TXT의 선택 옵션으로 제공하며 [사용법](docs/PAGE_CONNECTION.md)을 따른다. 모델 학습·별도 언어 모델의 문장 교정은 최신 사용자 결정에 따라 개발 범위에서 제외한다. 기존 OCR·Kiwi 공백 보정·원본 이미지 재인식은 유지한다. 배포 빌드는 아직 미구현이다.
 
 - 도구를 도입하는 변경에서 실제 확인한 설치·실행·테스트·정적 검사·포맷 검사·빌드 명령을 이 절에 등록한다. 작업 디렉터리와 실행 전제조건을 명시하고 복사해 실행 가능한 형태로 작성한다.
 - 명령·구조·의존성이 바뀌면 AGENTS.md도 같은 변경에서 갱신한다. 오래된 지침과 중복 규칙을 제거한다.

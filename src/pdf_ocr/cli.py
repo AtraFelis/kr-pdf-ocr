@@ -11,6 +11,7 @@ from PIL import ImageDraw
 
 from .dictionary import load_dictionary, save_dictionary
 from .engine import LocalPaddleEngine
+from .page_join import save_combined
 from .paragraphs import restore_paragraphs
 from .pdf import page_count, render_pages
 from .selection import (
@@ -31,7 +32,7 @@ def deny_connection(*args, **kwargs):
 
 
 def main():
-    """선택 페이지·영역을 로컬 OCR하고 원시 결과·복원 TXT·실행 기록을 저장한다."""
+    """로컬 OCR·선택적 페이지 연결을 실행해 원시 결과·페이지/통합 TXT·기록을 저장한다."""
     parser = argparse.ArgumentParser(description="로컬 PDF OCR 모델 시험")
     parser.add_argument("pdf", type=Path)
     parser.add_argument("--pages", default="all", help="all 또는 1,3,5-7")
@@ -60,6 +61,9 @@ def main():
         "--repair-spacing", action="store_true", help="로컬 Kiwi로 띄어쓰기 보정 제안"
     )
     parser.add_argument(
+        "--join-pages", action="store_true", help="PP-OCRv5 TXT의 연속 페이지 문단 연결"
+    )
+    parser.add_argument(
         "--retry-short-lines",
         action="store_true",
         help="PP-OCRv5의 짧은 줄·문장부호 재인식 후보 저장",
@@ -79,6 +83,10 @@ def main():
     )
     parser.add_argument("--regions-file", type=Path, help="페이지별 상대 좌표 JSON")
     args = parser.parse_args()
+    if args.join_pages and (
+        args.engine != "paddle" or args.format != "txt" or args.keep_line_breaks
+    ):
+        parser.error("페이지 연결은 PP-OCRv5 TXT의 문단 복원과 함께 사용하세요.")
     if args.retry_short_lines and (args.engine != "paddle" or args.format != "txt"):
         parser.error("줄 재인식은 PP-OCRv5의 TXT에서만 지원합니다.")
     if args.format == "md" and (
@@ -164,7 +172,6 @@ def main():
 
         spacing = LocalSpacingRepair(dictionary)
     records = []
-    combined = []
     try:
         for number, image in render_pages(args.pdf, pages, args.dpi):
             started = time.perf_counter()
@@ -217,10 +224,8 @@ def main():
                 cleaned, encoding="utf-8"
             )
             records.append(record)
-            combined.append(cleaned.rstrip())
-            (args.output / "combined.txt").write_text(
-                "\n\n".join(combined) + "\n", encoding="utf-8"
-            )
+            record["combined_text"] = cleaned.rstrip()
+            save_combined(args.output, records, args.join_pages)
             if args.retry_short_lines:
                 from .retry import retry_lines
 
@@ -273,6 +278,7 @@ def main():
                     "network_connections_blocked": True,
                     "paragraph_restoration": not args.keep_line_breaks,
                     "spacing_repair": args.repair_spacing,
+                    "join_pages": args.join_pages,
                     "short_line_retry": args.retry_short_lines,
                     "dictionary": dictionary.identity() if dictionary else None,
                     "total_pages": total_pages,
