@@ -10,7 +10,7 @@ import psutil
 from PIL import ImageDraw
 
 from .dictionary import load_dictionary, save_dictionary
-from .engine import LocalPaddleEngine
+from .engine import LocalPaddleEngine, validate_detection_threshold
 from .page_join import save_combined
 from .paragraphs import restore_paragraphs
 from .pdf import page_count, render_pages
@@ -38,6 +38,11 @@ def main():
     parser.add_argument("--pages", default="all", help="all 또는 1,3,5-7")
     parser.add_argument("--exclude-pages", default="", help="제외할 페이지 번호·범위")
     parser.add_argument("--dpi", type=int, default=300)
+    parser.add_argument(
+        "--det-box-thresh",
+        type=float,
+        help="PP-OCRv5 TXT의 글자 영역 검출 기준: 0.01~1.00 (기본 0.50)",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--format", choices=("txt", "md"), default="txt")
     parser.add_argument(
@@ -83,6 +88,13 @@ def main():
     )
     parser.add_argument("--regions-file", type=Path, help="페이지별 상대 좌표 JSON")
     args = parser.parse_args()
+    if args.det_box_thresh is not None:
+        if args.engine != "paddle" or args.format != "txt":
+            parser.error("검출 기준 조정은 PP-OCRv5 TXT에서만 지원합니다.")
+        try:
+            validate_detection_threshold(args.det_box_thresh)
+        except ValueError as error:
+            parser.error(str(error))
     if args.join_pages and (
         args.engine != "paddle" or args.format != "txt" or args.keep_line_breaks
     ):
@@ -164,7 +176,12 @@ def main():
             device=requested_device,
         )
     else:
-        engine = LocalPaddleEngine(ROOT, device=requested_device)
+        detection_options = (
+            {"det_box_thresh": args.det_box_thresh}
+            if args.det_box_thresh is not None
+            else {}
+        )
+        engine = LocalPaddleEngine(ROOT, device=requested_device, **detection_options)
     initialization = time.perf_counter() - start
     spacing = None
     if args.repair_spacing:

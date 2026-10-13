@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -33,6 +34,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QSplitter,
     QTabWidget,
@@ -43,6 +45,7 @@ from PySide6.QtWidgets import (
 from .devices import ocr_python
 from .dictionary import load_dictionary, save_dictionary
 from .dictionary_ui import ComparisonDialog, DictionaryDialog
+from .engine import DEFAULT_DET_BOX_THRESH
 from .markdown_export import MarkdownPreview, save_markdown
 from .model_info import MODEL_GUIDES, ModelInfoDialog
 from .pdf import page_count, render_pages
@@ -221,14 +224,31 @@ class OCRWindow(QMainWindow):
         side.addWidget(self.device)
         self.device_notice = QLabel()
         self.device_notice.setWordWrap(True)
+        self.device_notice.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )
         self.device_notice.setStyleSheet(
             "background:#fff7e6;color:#684313;border:1px solid #efd8aa;"
             "border-radius:5px;padding:8px;"
         )
-        side.addWidget(self.device_notice)
         self.device.currentIndexChanged.connect(self.update_device_notice)
         self.model.currentIndexChanged.connect(self.update_device_notice)
         self.update_device_notice()
+        detection_row = QHBoxLayout()
+        detection_row.addWidget(QLabel("글자 영역 검출 기준"))
+        self.det_box_thresh = QDoubleSpinBox()
+        self.det_box_thresh.setRange(0.01, 1.0)
+        self.det_box_thresh.setDecimals(2)
+        self.det_box_thresh.setSingleStep(0.05)
+        self.det_box_thresh.setValue(DEFAULT_DET_BOX_THRESH)
+        self.det_box_thresh.setAccessibleName("PP-OCRv5 글자 영역 검출 기준")
+        self.det_box_thresh.setToolTip(
+            "PP-OCRv5 TXT에 적용합니다. 기본 0.50. 낮추면 누락을 줄일 수 있지만 잡음도 늘어납니다. "
+            "높이면 잡음을 줄일 수 있지만 문장이 빠질 수 있습니다. 다음 OCR부터 적용하며 정확도 백분율이 아닙니다."
+        )
+        detection_row.addWidget(self.det_box_thresh)
+        side.addLayout(detection_row)
+        side.addWidget(self.device_notice)
         self.repair = QCheckBox("한국어 띄어쓰기 보정 제안")
         self.repair.setChecked(True)
         side.addWidget(self.repair)
@@ -264,7 +284,13 @@ class OCRWindow(QMainWindow):
         self.keep_hanja = QCheckBox("병기 한자 유지")
         side.addWidget(self.keep_hanja)
         self.update_export_options()
-        panels.addWidget(self.sidebar)
+        sidebar_scroll = QScrollArea()
+        sidebar_scroll.setWidgetResizable(True)
+        sidebar_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        sidebar_scroll.setMaximumWidth(280)
+        sidebar_scroll.setMinimumWidth(280)
+        sidebar_scroll.setWidget(self.sidebar)
+        panels.addWidget(sidebar_scroll)
 
         preview_panel = QWidget()
         middle = QVBoxLayout(preview_panel)
@@ -368,7 +394,7 @@ class OCRWindow(QMainWindow):
             "QPushButton {padding:7px 12px;} "
             "QPushButton#primary {background:#315ceb;color:white;border-radius:5px;} "
             "QPushButton#primary:disabled {background:#d8e0ec;color:#64748b;} "
-            "QLineEdit,QSpinBox,QComboBox {padding:4px;} "
+            "QLineEdit,QSpinBox,QDoubleSpinBox,QComboBox {padding:4px;} "
             "QPlainTextEdit,QListWidget {background:white;border:1px solid #d8e0ec;} "
             "QScrollArea#previewScroll {background:#edf1f7;border:1px solid #d8e0ec;} "
             "QProgressBar {min-height:18px;}"
@@ -449,7 +475,11 @@ class OCRWindow(QMainWindow):
             )
 
     def update_spacing_option(self):
-        """모델·출력 형식에 맞춰 Kiwi·재인식·페이지 연결·사전 옵션을 갱신한다."""
+        """모델·출력 형식에 맞춰 검출 기준·Kiwi·재인식·연결·사전 옵션을 갱신한다."""
+        self.det_box_thresh.setEnabled(
+            self.model.currentData() == "paddle"
+            and self.output_format.currentData() == "txt"
+        )
         self.repair.setEnabled(
             self.model.currentData() == "paddle"
             and self.output_format.currentData() == "txt"
@@ -515,7 +545,7 @@ class OCRWindow(QMainWindow):
         return snapshot
 
     def update_device_notice(self):
-        """선택 장치와 모델에 따라 CPU 자원 또는 GPU 실행 환경 안내를 표시한다."""
+        """장치·모델 안내를 표시하고 좁은 패널에서도 문장이 잘리지 않게 높이를 확보한다."""
         if self.device.currentData() == "cpu":
             text = (
                 "CPU 사용 안내\nGPU보다 처리가 오래 걸릴 수 있으며, "
@@ -530,6 +560,8 @@ class OCRWindow(QMainWindow):
                 "실행할 수 없다면 오류 안내를 확인하거나 CPU로 바꿔 주세요."
             )
         self.device_notice.setText(text)
+        # 입력 행이 확보하는 패널 폭보다 좁은 폭으로 계산해 줄바꿈 높이를 보장한다.
+        self.device_notice.setMinimumHeight(self.device_notice.heightForWidth(200))
 
     def show_model_info(self):
         """선택 모델 설명을 클릭·키보드로 열고 닫은 뒤 정보 버튼에 초점을 돌린다."""
@@ -771,6 +803,8 @@ class OCRWindow(QMainWindow):
             "--format",
             self.result_format,
         ]
+        if self.model.currentData() == "paddle" and self.result_format == "txt":
+            args.extend(["--det-box-thresh", f"{self.det_box_thresh.value():.2f}"])
         if self.repair.isChecked() and self.model.currentData() == "paddle":
             args.append("--repair-spacing")
             if snapshot:

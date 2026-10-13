@@ -106,8 +106,9 @@ def test_rotated_pdf_uses_display_coordinates(tmp_path):
 
 
 @pytest.mark.parametrize("page_override", [False, True])
+@pytest.mark.parametrize("det_box_thresh", [None, 0.6])
 def test_cli_crops_before_ocr_and_combines_only_selected_pages(
-    tmp_path, monkeypatch, page_override
+    tmp_path, monkeypatch, page_override, det_box_thresh
 ):
     """CLI가 제외·페이지별 설정을 반영해 자른 영역만 OCR하고 저장하는지 확인한다."""
     path = make_pdf(tmp_path / "input.pdf")
@@ -117,9 +118,9 @@ def test_cli_crops_before_ocr_and_combines_only_selected_pages(
     class Engine:
         """OCR에 전달된 이미지 크기를 기록하는 로컬 엔진 대역이다."""
 
-        def __init__(self, root, device="cpu"):
+        def __init__(self, root, device="cpu", det_box_thresh=0.5):
             """실제 모델·장치를 로딩하지 않고 CLI 엔진 대역을 생성한다."""
-            self.settings = {"text_det_box_thresh": 0.5}
+            self.settings = {"text_det_box_thresh": det_box_thresh}
 
         def recognize(self, image):
             """잘린 이미지의 크기를 기록하고 고정 텍스트·입력 좌표를 반환한다."""
@@ -155,12 +156,16 @@ def test_cli_crops_before_ocr_and_combines_only_selected_pages(
         # This page-specific region overrides the global full-height choice.
         arguments[arguments.index("200,800")] = "0,1000"
         arguments.extend(["--regions-file", str(overrides)])
+    if det_box_thresh is not None:
+        arguments.extend(["--det-box-thresh", str(det_box_thresh)])
     monkeypatch.setattr(sys, "argv", arguments)
     cli.main()
     assert calls == [(600, 600)]
     summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
     assert summary["selected_pages"] == [2]
-    assert summary["ocr_settings"] == {"text_det_box_thresh": 0.5}
+    assert summary["ocr_settings"] == {
+        "text_det_box_thresh": 0.5 if det_box_thresh is None else det_box_thresh
+    }
     record = summary["completed_pages"][0]
     assert record["region_pixel_box"] == [0, 200, 600, 800]
     assert record["lines"][0]["polygon"][0] == [0, 200]

@@ -1,20 +1,32 @@
 """로컬 PP-OCRv5 모델로 줄별 글자·신뢰도·입력 이미지 좌표를 인식한다."""
 
+import math
 import os
 from pathlib import Path
 
 from .devices import resolve_device
 
+DEFAULT_DET_BOX_THRESH = 0.5
+
+
+def validate_detection_threshold(value: float) -> float:
+    """프로그램의 검출 기준 범위 0.01~1.00 안의 유한한 실수만 반환한다."""
+    if not math.isfinite(value) or not 0.01 <= value <= 1.0:
+        raise ValueError("글자 영역 검출 기준은 0.01~1.00 사이의 유한한 수여야 합니다.")
+    return value
+
 
 class LocalPaddleEngine:
     """공식 로컬 검출·한국어 인식 모델을 CPU 또는 GPU에서 실행한다."""
 
-    def __init__(self, root: Path, device="cpu"):
-        """모델·장치를 확인하고 검출 영역 점수 기준 0.5로 로컬 엔진을 초기화한다.
+    def __init__(self, root: Path, device="cpu", det_box_thresh=DEFAULT_DET_BOX_THRESH):
+        """모델·장치를 확인하고 지정한 검출 영역 점수 기준으로 엔진을 초기화한다.
 
         settings는 실제 초기화에 전달한 검출 설정이며 실행 기록에 저장한다.
         인식 신뢰도는 모델의 반환값을 유지하고 문서 처리 중 다운로드하지 않는다.
+        검출 기준은 0.01~1.00이며 잘못된 값은 모델 로딩 전에 ValueError로 거부한다.
         """
+        det_box_thresh = validate_detection_threshold(det_box_thresh)
         for name in ("PP-OCRv5_mobile_det", "korean_PP-OCRv5_mobile_rec"):
             for filename in ("inference.yml", "inference.json", "inference.pdiparams"):
                 path = root / "models" / f"{name}_infer" / filename
@@ -34,7 +46,7 @@ class LocalPaddleEngine:
         self.device = "gpu:0" if selected == "gpu" else "cpu"
         # 검출 영역의 평균 점수 기준이다. 인식 신뢰도와는 별개의 값이며,
         # 0.6에서 누락된 대사를 0.5에서 보존하는 샘플을 확인했다.
-        self.settings = {"text_det_box_thresh": 0.5}
+        self.settings = {"text_det_box_thresh": det_box_thresh}
         self.engine = PaddleOCR(
             text_detection_model_name="PP-OCRv5_mobile_det",
             text_detection_model_dir=str(root / "models" / "PP-OCRv5_mobile_det_infer"),

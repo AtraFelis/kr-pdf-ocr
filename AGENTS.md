@@ -43,6 +43,8 @@ python -m venv .venv
 # OCR 실행: 출력 폴더는 아직 존재하지 않는 새 경로를 지정
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --output "output/ocr-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # PP-OCRv5 장치 지정: 전용 환경에서 CPU 또는 GPU 선택
+# 선택적 검출 기준: PP-OCRv5 TXT 전용, 기본 0.50, 0.01~1.00
+.\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --det-box-thresh 0.45 --output "output/paddle-threshold-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --output "output/paddle-gpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device cpu --output "output/paddle-cpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 짧은 대사·문장부호 재인식 후보: 비교 후 수동 채택
@@ -93,7 +95,7 @@ python -m venv .venv
 - 작업 전에 이 파일, 기획서, 개발 목록과 관련 코드를 읽는다. 한 번에 하나의 기능이나 오류를 해결한다.
 - PDF 처리, OCR, 페이지·영역 선택, 문단 복원, 저장, 화면 코드를 분리한다.
 - OCR 모델은 공통 인터페이스로 연결한다. 원본 인식 결과와 위치 정보를 보존하고 신뢰도를 임의로 만들지 않는다.
-- PP-OCRv5의 검출 영역 점수 기준은 `text_det_box_thresh=0.5`로 명시하며 인식 신뢰도와 구분한다. 실제 전달 설정은 TXT 실행의 `summary.json.ocr_settings`에 기록한다. 누락된 줄은 저장 JSON 재보정으로 생성하지 않고 새 OCR을 실행한다. 검증 범위·잡음 검출 가능성은 [검출 누락 기록](docs/history/OCR_DETECTION_OMISSION.md)을 따른다.
+- PP-OCRv5의 검출 영역 점수 기준은 기본 `text_det_box_thresh=0.5`이며 인식 신뢰도와 구분한다. 사용자가 [OCR 설정](docs/OCR_SETTINGS.md)에 따라 화면 또는 `--det-box-thresh`로 0.01~1.00의 유한한 값을 지정할 수 있다. 미지원 모델·형식의 명시적 값은 실행 전에 거부한다. 실제 전달 설정은 TXT 실행의 `summary.json.ocr_settings`에 기록한다. 누락된 줄은 저장 JSON 재보정으로 생성하지 않고 새 OCR을 실행한다. 검증 범위·잡음 검출 가능성은 [검출 누락 기록](docs/history/OCR_DETECTION_OMISSION.md)을 따른다.
 - 이름은 역할이 드러나게 작성한다. 주석은 처리 이유를, 한국어 안내는 사용자가 취할 조치를 설명한다.
 - 코드를 작성하거나 수정할 때 docstring을 반드시 작성·갱신한다. `src/`, `scripts/`, `tests/`의 모든 Python 모듈·클래스·함수·메서드에 적용하며 비공개·중첩 정의·생성자·Qt 이벤트 처리·테스트와 보조 함수도 포함한다. 목적과 실제 동작을 적고 복잡한 함수는 입력·반환/생성값·예외·좌표 단위·부작용·원본 보존 조건을 필요한 만큼 설명한다. 형식과 검사는 [코딩 컨벤션](docs/rules/CODING_CONVENTIONS.md)을 따른다. Docstring 문법이 없는 실행 파일은 동등한 문서 주석을 작성한다.
 - 개발 언어와 도구가 결정되면 표준 포맷터·정적 검사와 의존성 버전 관리를 설정한다. 기존 스타일을 따른다.

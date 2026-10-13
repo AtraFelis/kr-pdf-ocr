@@ -78,6 +78,53 @@ def test_coordinate_labels_stay_next_to_fields_when_widened(window, application)
     assert widths[1] > widths[0]
 
 
+def test_detection_threshold_keeps_value_and_disables_unsupported_options(
+    window, application
+):
+    """검출 값은 모델·형식 전환 후 유지하며 미지원 조합과 작업 중에는 잠근다."""
+    assert window.det_box_thresh.value() == 0.5
+    window.det_box_thresh.setValue(0.6)
+    window.model.setCurrentIndex(window.model.findData("vl16"))
+    assert not window.det_box_thresh.isEnabled()
+    window.model.setCurrentIndex(window.model.findData("paddle"))
+    assert window.det_box_thresh.isEnabled()
+    application.processEvents()
+    assert window.device_notice.height() >= window.device_notice.heightForWidth(
+        window.device_notice.width()
+    )
+    assert window.det_box_thresh.value() == 0.6
+    window.output_format.setCurrentIndex(window.output_format.findData("md"))
+    assert not window.det_box_thresh.isEnabled()
+    window.output_format.setCurrentIndex(window.output_format.findData("txt"))
+    window.set_busy(True)
+    assert not window.det_box_thresh.isEnabled()
+    window.set_busy(False)
+    assert window.det_box_thresh.value() == 0.6
+    assert window.det_box_thresh.isEnabled()
+
+
+@pytest.mark.parametrize("engine", ["paddle", "qwen"])
+def test_gui_passes_detection_threshold_only_to_paddle(
+    window, pdf, monkeypatch, engine
+):
+    """화면 입력값은 PP-OCRv5 작업 인자로만 고정하고 다른 모델에는 보내지 않는다."""
+    import sys
+
+    window.load_pdf(pdf)
+    window.model.setCurrentIndex(window.model.findData(engine))
+    window.det_box_thresh.setValue(0.6)
+    monkeypatch.setattr("pdf_ocr.gui.ocr_python", lambda *args: sys.executable)
+    calls = []
+    monkeypatch.setattr(window.process, "start", lambda *args: calls.append(args))
+    window.start_ocr()
+    assert len(calls) == 1
+    arguments = calls[0][1]
+    if engine == "paddle":
+        assert arguments[arguments.index("--det-box-thresh") + 1] == "0.60"
+    else:
+        assert "--det-box-thresh" not in arguments
+
+
 @pytest.mark.parametrize("zoom", [0.5, 1, 1.5])
 def test_reverse_mouse_drag_has_same_relative_region(application, zoom):
     """역방향 드래그와 확대 변화에도 상대 선택 범위가 같은지 확인한다."""

@@ -50,11 +50,16 @@ def paddle_engine(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("device", ["cpu", "gpu"])
-def test_detection_threshold_is_explicit_for_both_devices(paddle_engine, device):
+@pytest.mark.parametrize("threshold", [None, 0.01, 0.6, 1.0])
+def test_detection_threshold_is_explicit_for_both_devices(
+    paddle_engine, device, threshold
+):
     """CPU·GPU에서 같은 검출 기준을 명시하고 제공된 인식 결과를 보존한다."""
-    engine = LocalPaddleEngine(paddle_engine, device)
-    assert engine.settings == {"text_det_box_thresh": 0.5}
-    assert engine.engine.settings["text_det_box_thresh"] == 0.5
+    options = {} if threshold is None else {"det_box_thresh": threshold}
+    engine = LocalPaddleEngine(paddle_engine, device, **options)
+    expected = 0.5 if threshold is None else threshold
+    assert engine.settings == {"text_det_box_thresh": expected}
+    assert engine.engine.settings["text_det_box_thresh"] == expected
     assert engine.device == ("cpu" if device == "cpu" else "gpu:0")
     with Image.new("RGB", (80, 20), "white") as image:
         lines = engine.recognize(image)
@@ -75,3 +80,62 @@ def test_retry_uses_same_detection_without_rewriting_text(paddle_engine):
             "text": "“하하. 있지~.”",
             "confidence": 0.79,
         }
+
+
+@pytest.mark.parametrize("threshold", [0, -0.1, 1.01, float("nan"), float("inf")])
+def test_invalid_threshold_fails_before_model_load(tmp_path, threshold):
+    """범위 밖·비유한 값을 모델 파일 확인이나 런타임 초기화 전에 거부한다."""
+    with pytest.raises(ValueError, match="0.01~1.00"):
+        LocalPaddleEngine(tmp_path, det_box_thresh=threshold)
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "1.1", "nan", "inf"])
+def test_cli_invalid_threshold_does_not_create_output(tmp_path, monkeypatch, value):
+    """CLI의 무효한 값을 PDF·모델 로딩과 출력 생성 전에 거부한다."""
+    from pdf_ocr import cli
+
+    output = tmp_path / "result"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "ocr",
+            str(tmp_path / "missing.pdf"),
+            "--det-box-thresh",
+            value,
+            "--output",
+            str(output),
+        ],
+    )
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("engine,format", [("vl16", "md"), ("qwen", "txt")])
+def test_cli_rejects_threshold_for_other_engines(tmp_path, monkeypatch, engine, format):
+    """미지원 모델의 검출 값은 조용히 무시하지 않고 출력 생성 전에 거부한다."""
+    from pdf_ocr import cli
+
+    output = tmp_path / "result"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "ocr",
+            str(tmp_path / "missing.pdf"),
+            "--det-box-thresh",
+            "0.5",
+            "--engine",
+            engine,
+            "--format",
+            format,
+            "--output",
+            str(output),
+        ],
+    )
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+    assert error.value.code == 2
+    assert not output.exists()
