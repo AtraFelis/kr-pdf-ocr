@@ -36,6 +36,8 @@ def boundary_reason(previous: dict, following: dict) -> str | None:
         return "nonconsecutive_pages"
     for record in (previous, following):
         restored = record.get("restoration") or {}
+        if restored.get("partial_geometry_applied"):
+            return "partial_geometry_requires_review"
         if not restored.get("geometry_applied") or not restored.get("paragraphs"):
             return "missing_or_ambiguous_geometry"
         if any(
@@ -144,7 +146,7 @@ def combine_pages(
         if alternative is not None:
             text = alternative
         originals.append(text)
-        values = text.rstrip().split("\n\n") if source else [text.rstrip()]
+        values = paragraph_texts(restored, variant) if source else [text.rstrip()]
         if source and len(values) != len(source):
             raise ValueError("페이지 문단과 비교 텍스트의 개수가 일치하지 않습니다.")
         incoming = [
@@ -194,6 +196,62 @@ def combine_pages(
         "paragraphs": paragraphs,
         "boundaries": decisions,
     }
+
+
+def paragraph_texts(restored: dict, variant: str | None) -> list[str]:
+    """문단 객체/보정 배열에서 텍스트를 읽고 내부 빈 줄을 문단 경계로 오인하지 않는다.
+
+    이전 형식의 보정 문자열은 원문 글자 수와 실제 생성 구분자에 맞춰
+    정렬한다. 정렬 근거가 부족하면 다시 보정하도록 오류를 낸다.
+    """
+    source = [paragraph["text"] for paragraph in restored["paragraphs"]]
+    if variant is None:
+        return source
+    spacing = restored.get("spacing", {})
+    aligned = spacing.get("paragraphs", {}).get(variant)
+    if aligned is not None:
+        if (
+            not isinstance(aligned, list)
+            or len(aligned) != len(source)
+            or any(not isinstance(value, str) for value in aligned)
+        ):
+            raise ValueError("문단별 보정 텍스트 형식/개수를 확인하세요.")
+        if any(
+            re.sub(r"\s", "", before) != re.sub(r"\s", "", after)
+            for before, after in zip(source, aligned, strict=True)
+        ):
+            raise ValueError("문단별 보정 비교가 원문 글자를 변경했습니다.")
+        return aligned[:]
+    text = spacing.get(variant)
+    if text is None:
+        return source
+    if not isinstance(text, str) or re.sub(r"\s", "", text) != re.sub(
+        r"\s", "", "".join(source)
+    ):
+        raise ValueError("보정 비교 텍스트의 원문 글자를 확인하세요.")
+    if len(source) == 1:
+        return [text]
+    result, offset = [], 0
+    for index, paragraph in enumerate(source):
+        wanted = re.sub(r"\s", "", paragraph)
+        begin = offset
+        found = ""
+        while offset < len(text) and len(found) < len(wanted):
+            if not text[offset].isspace():
+                found += text[offset]
+            offset += 1
+        if not wanted or found != wanted:
+            raise ValueError(
+                "이전 보정 결과의 문단을 정렬할 수 없습니다. 원시 JSON을 다시 보정하세요."
+            )
+        if index == len(source) - 1:
+            result.append(text[begin:])
+        else:
+            if not text.startswith("\n\n", offset):
+                raise ValueError("이전 보정 결과의 문단 경계가 일치하지 않습니다.")
+            result.append(text[begin:offset])
+            offset += 2
+    return result
 
 
 def save_combined(

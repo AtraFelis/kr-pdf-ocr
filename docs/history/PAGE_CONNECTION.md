@@ -21,3 +21,5 @@ PR #10은 main에 미병합 상태였으므로 닫았다. PR #11도 이미 닫�
 합성 결과는 `output/page-join-example-enabled/`, `output/page-join-example-disabled/`, 저장 샘플 실행은 `output/page-join-saved-sample/`에 보관한다. 이번 실행은 저장 JSON을 재처리했으며 OCR 모델을 새로 실행한 결과가 아니다. 새 OCR CLI 연결과 실제 GUI 조작·모든 보존/오류 조건·다양한 문서/회전/DPI·취소/부분 실패의 실제 실행은 추가 확인이 필요하다. 별도 pytest 회귀 검사는 이번 요청에서 추가·실행하지 않았다.
 
 Docstring 검사(Python 39개)·Ruff·포맷·Git 공백 검사를 통과했다. Markdown 33개에서 코드 예제 밖 로컬 링크 대상 158개의 존재를 확인했고 CLI·재처리 도움말을 실행했다. 정적 검사 통과를 실제 GUI·OCR 실행 검증으로 표현하지 않는다.
+
+후속 PR #12 리뷰 수정·전체 회귀 160개·실제 17페이지 재처리 확인은 [별도 기록](PR12_REVIEW_AND_PAGE17.md)을 따른다. 위 pytest 미실행 표기는 최초 페이지 연결 커밋 c69edd7 당시 상태다.

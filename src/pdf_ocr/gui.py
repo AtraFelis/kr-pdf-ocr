@@ -922,9 +922,15 @@ class OCRWindow(QMainWindow):
                     self.editor.setPlainText(combined.read_text(encoding="utf-8"))
                     self.editor.document().setModified(False)
                 reviews = 0
+                partial_pages = 0
                 for path in self.run_folder.glob("page-*.json"):
                     record = json.loads(path.read_text(encoding="utf-8"))
                     reviews += len((record.get("restoration") or {}).get("reviews", []))
+                    partial_pages += bool(
+                        (record.get("restoration") or {}).get(
+                            "partial_geometry_applied"
+                        )
+                    )
                 connection_label = ""
                 connection_path = self.run_folder / "connections.json"
                 if connection_path.is_file() and self.result_format == "txt":
@@ -941,6 +947,11 @@ class OCRWindow(QMainWindow):
                 self.review_label.setText(
                     f"{connection_label}확인 항목 {reviews}개 · 인식 결과를 원문과 비교한 뒤 저장하세요."
                 )
+                if partial_pages:
+                    self.review_label.setText(
+                        self.review_label.text()
+                        + f" · 부분 복원 {partial_pages}페이지(겹침 영역은 원문 유지)"
+                    )
                 if self.result_format == "md":
                     self.review_label.setText(
                         "표·숫자·수식·읽기 순서와 이미지 누락을 원문에서 확인하세요."

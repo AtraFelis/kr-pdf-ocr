@@ -40,6 +40,7 @@
 - [한국어 문자 교정 도입 계획](history/TEXT_CORRECTION_PLAN.md)
 - [오류 샘플의 보정 중단 수정](history/OCR_ERROR_SAMPLE.md)
 - [모델 평가 변경 제외·페이지 연결 구현](history/PAGE_CONNECTION.md)
+- [PR #12 리뷰·17페이지 보정 누락 재발 수정](history/PR12_REVIEW_AND_PAGE17.md)
 - [인용문 여는 부호의 공백 수정](history/QUOTE_SPACING.md)
 - [짧은 대사·문장부호 재인식 검증](history/SHORT_TEXT_RETRY.md)
 - [실제 짧은 대사 오류의 VLM 재인식](history/VISUAL_RETRY_ERRORS.md)
