@@ -47,6 +47,7 @@ from .markdown_export import MarkdownPreview, save_markdown
 from .model_info import MODEL_GUIDES, ModelInfoDialog
 from .pdf import page_count, render_pages
 from .preview import PagePreview
+from .retry_ui import RetryDialog
 from .selection import Region, select_pages
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -231,6 +232,11 @@ class OCRWindow(QMainWindow):
         self.repair = QCheckBox("한국어 띄어쓰기 보정 제안")
         self.repair.setChecked(True)
         side.addWidget(self.repair)
+        self.retry_short = QCheckBox("짧은 대사·문장부호 재인식 후보")
+        self.retry_short.setToolTip(
+            "PP-OCRv5 TXT에서 영역을 두 조건으로 다시 읽습니다. 원문을 확인한 뒤 후보를 선택하세요. 처리 시간이 늘어납니다."
+        )
+        side.addWidget(self.retry_short)
         self.repair.setToolTip(
             "글자는 유지하며 공백만 보정합니다. 고유명사 등은 원문 확인이 필요합니다."
         )
@@ -329,6 +335,10 @@ class OCRWindow(QMainWindow):
         )
         self.review_label.setWordWrap(True)
         right.addWidget(self.review_label)
+        self.retry_button = QPushButton("재인식 후보 비교")
+        self.retry_button.setEnabled(False)
+        self.retry_button.clicked.connect(self.show_retry_candidates)
+        right.addWidget(self.retry_button)
         comparison_actions = QHBoxLayout()
         self.compare_button = QPushButton("현재 OCR 재보정·비교")
         self.compare_button.clicked.connect(self.start_reprocess)
@@ -383,6 +393,17 @@ class OCRWindow(QMainWindow):
             not busy and self.run_folder is not None and self.result_format == "txt"
         )
         self.saved_compare_button.setEnabled(not busy)
+        self.retry_button.setEnabled(
+            not busy and self.result_folder is not None and self.result_format == "txt"
+        )
+
+    def show_retry_candidates(self):
+        """현재 결과 폴더의 재인식 후보를 별도 창에서 비교하고 원문 편집을 유지한다."""
+        if self.result_folder is not None:
+            try:
+                RetryDialog(self.result_folder, self).exec()
+            except (OSError, ValueError, KeyError) as error:
+                QMessageBox.warning(self, "재인식 결과 읽기 실패", str(error))
 
     def update_save_button(self):
         """저장 버튼을 갱신하고 활성 Markdown 미리보기에만 편집 내용을 반영한다."""
@@ -425,6 +446,10 @@ class OCRWindow(QMainWindow):
     def update_spacing_option(self):
         """선택 모델에 맞춰 Kiwi 보정 사용 가능 여부와 안내를 갱신한다."""
         self.repair.setEnabled(
+            self.model.currentData() == "paddle"
+            and self.output_format.currentData() == "txt"
+        )
+        self.retry_short.setEnabled(
             self.model.currentData() == "paddle"
             and self.output_format.currentData() == "txt"
         )
@@ -743,6 +768,12 @@ class OCRWindow(QMainWindow):
                 args.extend(["--dictionary", str(snapshot)])
         if self.keep_hanja.isChecked() and self.result_format == "txt":
             args.append("--keep-hanja")
+        if (
+            self.retry_short.isChecked()
+            and self.model.currentData() == "paddle"
+            and self.result_format == "txt"
+        ):
+            args.append("--retry-short-lines")
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONIOENCODING", "utf-8")
         self.process.setProcessEnvironment(environment)

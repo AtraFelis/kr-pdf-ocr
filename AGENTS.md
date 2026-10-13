@@ -45,6 +45,8 @@ python -m venv .venv
 # PP-OCRv5 장치 지정: 전용 환경에서 CPU 또는 GPU 선택
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --output "output/paddle-gpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device cpu --output "output/paddle-cpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 짧은 대사·문장부호 재인식 후보: 비교 후 수동 채택
+.\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample_ocr_err.pdf --pages 1-2 --device gpu --retry-short-lines --output "output/retry-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # GPU VLM: 동일한 방식으로 별도 출력, CUDA 불가 시 CPU로 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine vl --output "output/vl-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 한국어 품질 비교 후보 Qwen
@@ -96,6 +98,7 @@ python -m venv .venv
 - 모델과 CPU·GPU 장치는 별도로 선택한다. CPU는 속도·CPU 사용량 안내를 표시하며 정확도가 자동으로 낮아진다고 단정하지 않는다. 명시적인 GPU 선택을 조용히 CPU로 바꾸지 않는다. GUI는 PP-OCRv5 전용 환경이 있으면 해당 Python 프로세스를 사용한다. CLI의 `auto`만 GPU 불가 시 CPU로 전환한다. `.venv`에 GPU PaddlePaddle과 GPU PyTorch를 함께 설치하지 않는다. 전용 환경에는 PyTorch를 넣지 않는다.
 - OCR은 화면을 멈추지 않도록 실행하며 취소·오류 시 완료 결과를 보존한다. TXT는 UTF-8로 저장한다.
 - 모델 버전·라이선스·실행 조건을 기록한다.
+- 짧은 줄 재인식은 [사용법](docs/SHORT_TEXT_RETRY.md)을 따른다. PP-OCRv5 TXT의 선택 기능이며 여백·배율별 후보와 실패·입력/전체 좌표를 원시 결과와 분리해 기록한다. 점수로 자동 채택하거나 문장부호를 추측 생성하지 않는다. 비교 창에서 이미지를 확인한 뒤 후보를 복사해 편집한다. 후보 선정 상한·재표본화 한계·처리 시간 증가를 명시한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.
 - 기본 문단 복원은 단일 본문 영역만 처리한다. 좌표가 없거나 같은 높이에 영역이 겹치면 줄바꿈을 보존하고 확인 대상으로 남긴다. `--keep-line-breaks`로 복원을 끌 수 있다. `--repair-spacing`은 Kiwi 로컬 모델을 사용하는 선택 기능이며 공백을 제외한 글자가 변경되면 적용을 중단한다. 변경 제안과 모호한 연결은 JSON에 기록한다.
 - Markdown은 [사용법](docs/MARKDOWN_EXPORT.md)을 따른다. VL 1.6 공식 배치·인식 파이프라인과 별도 환경을 사용하고 모델·출력 형식을 자동 변경하지 않는다. 블록·원시 결과·이미지·좌표를 보존하며 TXT용 Kiwi·사전·한자 필터를 적용하지 않는다. 미리보기의 외부 URL·결과 밖 파일 접근을 금지하고 내보내기는 새 이미지 폴더와 상대 링크를 사용한다. 샘플 실행과 회귀 검사는 [검증 기록](docs/history/MARKDOWN_SAMPLE_VALIDATION.md)의 범위에서 확인했다. 일반 문서 인식 품질·CPU 전체 문서·다양한 DPI는 추가 평가한다.

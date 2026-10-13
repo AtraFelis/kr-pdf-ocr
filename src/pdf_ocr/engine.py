@@ -59,3 +59,12 @@ class LocalPaddleEngine:
                 strict=True,
             )
         ]
+
+    def recognize_line(self, image):
+        """기존 로컬 검출·인식기로 다시 읽고 단일 줄 결과만 후보로 반환한다."""
+        lines = self.recognize(image)
+        if len(lines) != 1:
+            raise ValueError(
+                "재인식에서 단일 줄을 찾지 못했습니다. 원본 영역을 확인하세요."
+            )
+        return {"text": lines[0]["text"], "confidence": lines[0]["confidence"]}
