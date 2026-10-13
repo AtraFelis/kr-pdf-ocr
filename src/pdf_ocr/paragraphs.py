@@ -25,6 +25,63 @@ PARTICLES = {
 }
 
 
+def attach_closing_punctuation(entries: list[dict]) -> tuple[list[dict], list[dict]]:
+    """같은 줄 오른쪽에 분리된 작은 닫는 문장부호를 유일한 본문 줄에 연결한다.
+
+    문장부호를 생성·교체하지 않는다. 높이·너비·오른쪽 경계·중심 높이가
+    가까운 본문 후보가 하나일 때만 연결하며 입력과 원시 좌표는 변경하지 않는다.
+    연결한 줄의 모든 원본 인덱스를 보존하고 모호한 배치는 그대로 반환한다.
+    """
+    closing = re.compile(r"^[\"'”’」』)\]}.,!?…。，！？]+$")
+    fragments = [entry for entry in entries if closing.fullmatch(entry["text"])]
+    hosts = [entry for entry in entries if not closing.fullmatch(entry["text"])]
+    attachments = {}
+    reviews = []
+    for fragment in fragments:
+        candidates = []
+        for host in hosts:
+            height = host["bottom"] - host["top"]
+            center = (fragment["top"] + fragment["bottom"]) / 2
+            if (
+                fragment["bottom"] - fragment["top"] <= height * 0.6
+                and fragment["right"] - fragment["left"] <= height * 0.75
+                and host["top"] <= center <= host["bottom"]
+                and host["right"] - height * 0.25
+                <= fragment["left"]
+                <= host["right"] + height * 0.6
+                and fragment["right"] >= host["right"]
+            ):
+                candidates.append(host)
+        if len(candidates) == 1:
+            attachments.setdefault(candidates[0]["index"], []).append(fragment)
+    attached = {f["index"] for group in attachments.values() for f in group}
+    result = []
+    for entry in entries:
+        if entry["index"] in attached:
+            continue
+        suffixes = sorted(attachments.get(entry["index"], []), key=lambda x: x["left"])
+        if not suffixes:
+            result.append(entry)
+            continue
+        group = [entry, *suffixes]
+        indices = [item["index"] for item in group]
+        result.append(
+            {
+                **entry,
+                "text": "".join(item["text"] for item in group),
+                "line_indices": indices,
+                "left": min(item["left"] for item in group),
+                "right": max(item["right"] for item in group),
+                "top": min(item["top"] for item in group),
+                "bottom": max(item["bottom"] for item in group),
+            }
+        )
+        reviews.append(
+            {"reason": "attached_closing_punctuation", "line_indices": indices}
+        )
+    return result, reviews
+
+
 def join_lines(previous: str, following: str):
     """Return separator and uncertainty; do not rewrite any recognized character."""
     token = following.split()[0].rstrip(".,!?。！？")
@@ -49,6 +106,7 @@ def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
 
     Returns:
         text, paragraphs, reviews와 좌표 복원 여부 geometry_applied를 담은 사전.
+        같은 줄 끝의 작은 닫는 문장부호만 연결한 뒤 좌표를 검사한다.
         좌표가 없거나 영역이 겹치면 기존 줄 순서·형태를 보존한다.
 
     Raises:
@@ -78,6 +136,7 @@ def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
         entries.append(
             {
                 "index": index,
+                "line_indices": [index],
                 "text": text,
                 "left": min(xs),
                 "top": min(ys),
@@ -88,6 +147,9 @@ def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
     if not entries:
         return {"text": "", "paragraphs": [], "reviews": [], "geometry_applied": False}
     original_entries = entries[:]
+    if any(x["bottom"] <= x["top"] or x["right"] <= x["left"] for x in entries):
+        raise ValueError("OCR 영역의 크기가 올바르지 않습니다.")
+    entries, attachments = attach_closing_punctuation(entries)
     entries.sort(key=lambda x: (x["top"], x["left"]))
     height = median(x["bottom"] - x["top"] for x in entries)
     if height <= 0:
@@ -111,7 +173,10 @@ def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
             "reviews": [{"reason": "overlapping_rows_or_columns"}],
             "geometry_applied": False,
         }
-    paragraphs = [{"text": entries[0]["text"], "line_indices": [entries[0]["index"]]}]
+    reviews.extend(attachments)
+    paragraphs = [
+        {"text": entries[0]["text"], "line_indices": entries[0]["line_indices"][:]}
+    ]
     for previous, current in pairwise(entries):
         previous_height = previous["bottom"] - previous["top"]
         current_height = current["bottom"] - current["top"]
@@ -134,12 +199,12 @@ def restore_paragraphs(lines: list[dict], exclude_hanja: bool = True) -> dict:
         )
         if boundary:
             paragraphs.append(
-                {"text": current["text"], "line_indices": [current["index"]]}
+                {"text": current["text"], "line_indices": current["line_indices"][:]}
             )
         else:
             separator, uncertain = join_lines(previous["text"], current["text"])
             paragraphs[-1]["text"] += separator + current["text"]
-            paragraphs[-1]["line_indices"].append(current["index"])
+            paragraphs[-1]["line_indices"].extend(current["line_indices"])
             if uncertain:
                 reviews.append(
                     {

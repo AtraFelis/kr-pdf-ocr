@@ -4,7 +4,7 @@
 
 Windows에서 로컬 AI 모델로 한국어 PDF를 OCR하고, 선택한 페이지·영역의 텍스트를 문단 단위로 복원하여 UTF-8 TXT로 저장한다. 한국어·영어를 우선하며 한국어에 병기된 한자는 TXT에서 제외한다. 문서 처리는 로컬에서 수행한다.
 
-현재는 TXT를 지원한다. 클릭형 모델 정보 안내를 제공한다. 복잡한 문서의 구조 분석·Markdown 출력은 [모델 안내·출력 형식 설계](docs/MODEL_AND_EXPORT.md)에 정의된 추가 개발 목표다. 텍스트 중심 경로는 PP-OCRv5 + TXT, 복잡한 문서 경로는 VL 1.6 공식 문서 파이프라인 + Markdown으로 계획한다.
+TXT와 VL 1.6 공식 구조 분석·Markdown의 첫 연결, 클릭형 모델 안내를 제공한다. Markdown은 사용자 샘플의 GPU 2페이지·CPU 부분 영역·저장·취소를 검증했으며 [사용법과 제한](docs/MARKDOWN_EXPORT.md)을 따른다. 텍스트 중심 경로는 PP-OCRv5 + TXT, 복잡한 문서 경로는 VL 1.6 공식 문서 파이프라인 + Markdown으로 계획한다.
 
 이 파일은 프로젝트 전체에 적용한다. 상세 기능은 [기획서](docs/PLAN.md), 작업 순서는 [개발 목록](docs/TASKS.md), 프로젝트 안내는 [README](README.md)를 참조한다. 상세 기획을 이 파일에 중복 작성하지 않는다.
 
@@ -23,7 +23,7 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 OCR하고, 선택한 페이�
 
 ## 3. 개발 명령과 유지 관리
 
-작업 디렉터리: 프로젝트 루트. Python 3.12와 프로젝트 전용 `.venv`를 사용한다. PP-OCRv5의 CPU·GPU 실행은 Windows CUDA DLL 충돌을 피하도록 `.venv-paddle`에서 분리한다. 화면·VL·Qwen은 `.venv`를 사용한다. 데스크톱 앱 배포 빌드는 아직 미설정이다.
+작업 디렉터리: 프로젝트 루트. Python 3.12와 프로젝트 전용 `.venv`를 사용한다. PP-OCRv5의 CPU·GPU 실행은 Windows CUDA DLL 충돌을 피하도록 `.venv-paddle`에서 분리한다. 화면·VL·Qwen TXT는 `.venv`, 공식 VL 1.6 구조 분석은 `.venv-doc-parser`를 사용한다. 데스크톱 앱 배포 빌드는 아직 미설정이다.
 
 ```powershell
 # 가상환경 생성: 사용 가능한 Python 3.12 실행 파일로 실행
@@ -45,6 +45,10 @@ python -m venv .venv
 # PP-OCRv5 장치 지정: 전용 환경에서 CPU 또는 GPU 선택
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device gpu --output "output/paddle-gpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device cpu --output "output/paddle-cpu-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 짧은 대사·문장부호 재인식 후보: 비교 후 수동 채택
+.\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample_ocr_err.pdf --pages 1-2 --device gpu --retry-short-lines --output "output/retry-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 선택 줄의 별도 VLM 재인식 CLI 도움말: 페이지 JSON·0부터 시작하는 내부 줄 인덱스 필요
+.\.venv\Scripts\python.exe -m pdf_ocr.retry_vl --help
 # GPU VLM: 동일한 방식으로 별도 출력, CUDA 불가 시 CPU로 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --engine vl --output "output/vl-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 한국어 품질 비교 후보 Qwen
@@ -59,6 +63,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02 --repair-spacing --dictionary user_data/dictionaries/실제파일.json --output "output/dictionary-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 페이지 제외와 기준 높이 1000px의 200~800px 선택
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-3 --exclude-pages 2,3 --y-range 200,800 --reference-height 1000 --output "output/region-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 구조 분석 전용 환경: 네트워크 설치, 기존 두 환경과 분리
+.\.venv\Scripts\python.exe -m venv .venv-doc-parser
+.\.venv-doc-parser\Scripts\python.exe -m pip install -r requirements-structure.lock.txt --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu129/
+.\.venv-doc-parser\Scripts\python.exe -m pip install --no-deps --no-build-isolation -e .
+.\.venv-doc-parser\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe scripts/download_structure_models.py
+# 실제 Markdown OCR 호출·검증 상태는 docs/MARKDOWN_EXPORT.md 참조
 # 데스크톱 화면 실행
 .\.venv\Scripts\python.exe -m pdf_ocr.gui
 # 검증
@@ -89,8 +100,10 @@ python -m venv .venv
 - 모델과 CPU·GPU 장치는 별도로 선택한다. CPU는 속도·CPU 사용량 안내를 표시하며 정확도가 자동으로 낮아진다고 단정하지 않는다. 명시적인 GPU 선택을 조용히 CPU로 바꾸지 않는다. GUI는 PP-OCRv5 전용 환경이 있으면 해당 Python 프로세스를 사용한다. CLI의 `auto`만 GPU 불가 시 CPU로 전환한다. `.venv`에 GPU PaddlePaddle과 GPU PyTorch를 함께 설치하지 않는다. 전용 환경에는 PyTorch를 넣지 않는다.
 - OCR은 화면을 멈추지 않도록 실행하며 취소·오류 시 완료 결과를 보존한다. TXT는 UTF-8로 저장한다.
 - 모델 버전·라이선스·실행 조건을 기록한다.
+- 짧은 줄 재인식은 [사용법](docs/SHORT_TEXT_RETRY.md)을 따른다. PP-OCRv5 TXT의 선택 기능이며 여백·배율별 후보와 실패·입력/전체 좌표를 원시 결과와 분리해 기록한다. 선택 줄의 VL 1.6·Qwen 재인식은 별도 .venv 프로세스에서 실행하고 외부 연결을 차단한다. 점수로 자동 채택하거나 문장부호를 추측 생성하지 않는다. 비교 창에서 이미지를 확인한 뒤 후보를 복사하거나 유일한 일치 구간에만 반영하며 실행 취소를 지원한다. 중복 구간·수정본을 추측 교체하지 않는다. 후보 선정 상한·재표본화 한계·처리 시간 증가를 명시한다.
 - 병기 한자를 기본적으로 제외하고 원시 OCR 결과를 따로 보존한다. 한국어 뒤에 붙은 한자 및 한자만 든 괄호를 병기로 처리한다. 독립 한자나 한글로 오인식된 부분을 추측으로 삭제하지 않는다. `--keep-hanja`로 원시 한자를 유지할 수 있다.
 - 기본 문단 복원은 단일 본문 영역만 처리한다. 좌표가 없거나 같은 높이에 영역이 겹치면 줄바꿈을 보존하고 확인 대상으로 남긴다. `--keep-line-breaks`로 복원을 끌 수 있다. `--repair-spacing`은 Kiwi 로컬 모델을 사용하는 선택 기능이며 공백을 제외한 글자가 변경되면 적용을 중단한다. 변경 제안과 모호한 연결은 JSON에 기록한다.
+- Markdown은 [사용법](docs/MARKDOWN_EXPORT.md)을 따른다. VL 1.6 공식 배치·인식 파이프라인과 별도 환경을 사용하고 모델·출력 형식을 자동 변경하지 않는다. 블록·원시 결과·이미지·좌표를 보존하며 TXT용 Kiwi·사전·한자 필터를 적용하지 않는다. 미리보기의 외부 URL·결과 밖 파일 접근을 금지하고 내보내기는 새 이미지 폴더와 상대 링크를 사용한다. 샘플 실행과 회귀 검사는 [검증 기록](docs/history/MARKDOWN_SAMPLE_VALIDATION.md)의 범위에서 확인했다. 일반 문서 인식 품질·CPU 전체 문서·다양한 DPI는 추가 평가한다.
 - 사용자 사전은 [사용법](docs/USER_DICTIONARY.md)을 따른다. `user_data/`는 Git에서 제외한다. 작업 시작 시 사전을 고정하고 이름·버전·내용 식별값과 비교 결과를 기록한다. 사전은 PP-OCRv5 Kiwi 보정에만 적용하며 원문 글자·문단·편집본을 변경하지 않는다. 충돌 표기는 거부하고 겹치는 이름은 확인 대상으로 남긴다. 재보정은 새 출력 폴더·별도 비교 창을 사용한다.
 - 커밋과 PR은 하나의 변경 목적을 중심으로 구성하고 변경 이유와 검증 결과를 적는다.
 - Git 작업은 [Git 컨벤션](docs/rules/GIT_CONVENTIONS.md)을 따른다. 기본 브랜치는 `main`, 작업 브랜치는 `codex/<작업명>`이며 커밋은 `<type>(<scope>): <한국어 설명>` 형식을 사용한다. 관련 파일만 추가하고 커밋 전 스테이징 내용·제외 대상·검증 결과를 확인한다.

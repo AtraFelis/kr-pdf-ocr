@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--exclude-pages", default="", help="제외할 페이지 번호·범위")
     parser.add_argument("--dpi", type=int, default=300)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--format", choices=("txt", "md"), default="txt")
     parser.add_argument(
         "--engine", choices=("paddle", "vl", "vl16", "qwen"), default="paddle"
     )
@@ -59,6 +60,11 @@ def main():
         "--repair-spacing", action="store_true", help="로컬 Kiwi로 띄어쓰기 보정 제안"
     )
     parser.add_argument(
+        "--retry-short-lines",
+        action="store_true",
+        help="PP-OCRv5의 짧은 줄·문장부호 재인식 후보 저장",
+    )
+    parser.add_argument(
         "--dictionary", type=Path, help="띄어쓰기 보정에 사용할 로컬 JSON 사전"
     )
     region_options = parser.add_mutually_exclusive_group()
@@ -73,6 +79,18 @@ def main():
     )
     parser.add_argument("--regions-file", type=Path, help="페이지별 상대 좌표 JSON")
     args = parser.parse_args()
+    if args.retry_short_lines and (args.engine != "paddle" or args.format != "txt"):
+        parser.error("줄 재인식은 PP-OCRv5의 TXT에서만 지원합니다.")
+    if args.format == "md" and (
+        args.engine != "vl16"
+        or args.repair_spacing
+        or args.dictionary
+        or args.vl_lines
+        or args.keep_line_breaks
+    ):
+        parser.error(
+            "Markdown은 VL 1.6에서 지원하며 TXT용 줄·사전·띄어쓰기 옵션을 함께 사용할 수 없습니다."
+        )
     dictionary = None
     if args.dictionary:
         if not args.repair_spacing or args.engine != "paddle":
@@ -117,6 +135,11 @@ def main():
         save_dictionary(args.output / "dictionary.json", dictionary)
     socket.socket.connect = deny_connection
     socket.socket.connect_ex = deny_connection
+    if args.format == "md":
+        from .structure import run_structure
+
+        run_structure(args, ROOT, pages, region, page_regions)
+        return
     start = time.perf_counter()
     requested_device = args.device or ("cpu" if args.engine == "paddle" else "auto")
     if args.engine in ("vl", "vl16", "qwen"):
@@ -193,12 +216,45 @@ def main():
             (args.output / f"page-{number:03}.txt").write_text(
                 cleaned, encoding="utf-8"
             )
-            image.close()
             records.append(record)
             combined.append(cleaned.rstrip())
             (args.output / "combined.txt").write_text(
                 "\n\n".join(combined) + "\n", encoding="utf-8"
             )
+            if args.retry_short_lines:
+                from .retry import retry_lines
+
+                retry_started = time.perf_counter()
+                with image.crop(box) as retry_image:
+                    local_lines = [
+                        {
+                            **line,
+                            "polygon": [
+                                [x - box[0], y - box[1]] for x, y in line["polygon"]
+                            ],
+                        }
+                        for line in lines
+                    ]
+                    record["recognition_retry"] = retry_lines(
+                        retry_image, local_lines, engine, args.output, number
+                    )
+                for item in record["recognition_retry"]:
+                    for candidate in item["candidates"]:
+                        a, b, c, d = candidate["bbox_in_input"]
+                        candidate["bbox"] = [
+                            a + box[0],
+                            b + box[1],
+                            c + box[0],
+                            d + box[1],
+                        ]
+                record["recognition_retry_seconds"] = (
+                    time.perf_counter() - retry_started
+                )
+                record["seconds"] = time.perf_counter() - started
+                (args.output / f"page-{number:03}.json").write_text(
+                    json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+            image.close()
             print(
                 f"page={number} lines={len(lines)} seconds={record['seconds']:.2f}",
                 flush=True,
@@ -217,6 +273,7 @@ def main():
                     "network_connections_blocked": True,
                     "paragraph_restoration": not args.keep_line_breaks,
                     "spacing_repair": args.repair_spacing,
+                    "short_line_retry": args.retry_short_lines,
                     "dictionary": dictionary.identity() if dictionary else None,
                     "total_pages": total_pages,
                     "selected_pages": pages,

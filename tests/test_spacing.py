@@ -5,7 +5,7 @@ import re
 import pytest
 
 from pdf_ocr.paragraphs import restore_paragraphs
-from pdf_ocr.spacing import LocalSpacingRepair
+from pdf_ocr.spacing import LocalSpacingRepair, separate_korean_quote_boundaries
 
 
 @pytest.fixture(scope="module")
@@ -36,6 +36,73 @@ def test_generated_page_without_geometry_is_preserved(repairer):
         [{"text": "독립 문단\n\n두 번째 문단", "polygon": None}]
     )
     assert repairer.repair(result) == result
+
+
+@pytest.mark.parametrize(
+    "opening,closing",
+    [
+        ("'", "'"),
+        ("‘", "’"),
+        ("‘", "'"),
+        ('"', '"'),
+        ("“", "”"),
+        ("「", "」"),
+        ("『", "』"),
+    ],
+)
+def test_korean_quote_boundary_preserves_suffix_and_characters(opening, closing):
+    """한글 인용 앞만 분리하고 닫는 부호 뒤 조사·내부 공백과 글자를 보존한다."""
+    before = f"문장 중에{opening}사람은 옷을 입는다{closing}라는 말이 있다."
+    after = separate_korean_quote_boundaries(before)
+    assert after == f"문장 중에 {opening}사람은 옷을 입는다{closing}라는 말이 있다."
+    assert re.sub(r"\s", "", after) == re.sub(r"\s", "", before)
+    assert separate_korean_quote_boundaries(after) == after
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "don't change John's words",
+        "본문의'짝없는 인용",
+        "끝났다'라는 문장",
+        "중에 '이미 분리됐다'라는 말",
+        "인용'English text'는 유지",
+        "'시작 인용'은 그대로",
+    ],
+)
+def test_english_unmatched_and_existing_quote_boundaries_are_preserved(text):
+    """영문 아포스트로피·짝 없는 부호·기존 공백·문장 시작을 추측 변경하지 않는다."""
+    assert separate_korean_quote_boundaries(text) == text
+
+
+def test_real_kiwi_quote_content_and_opening_boundary(repairer):
+    """실제 Kiwi의 인용문 내부 보정과 여는 부호 경계 보완을 함께 검증한다."""
+    before = "문장 중에'사람은옷을입는다'라는 말이 있다."
+    result = {
+        "geometry_applied": True,
+        "paragraphs": [{"text": before, "line_indices": [0]}],
+        "reviews": [],
+        "text": before,
+    }
+    repaired = repairer.repair(result)
+    assert "중에 '사람은 옷을 입는다'라는" in repaired["text"]
+    assert re.sub(r"\s", "", repaired["text"]) == re.sub(r"\s", "", before)
+    assert repaired["spacing"]["korean_quote_boundaries"]
+    assert result["text"] == before
+
+
+def test_detached_quote_page_is_eligible_for_real_spacing(repairer):
+    """작은 닫는 따옴표를 연결한 페이지에도 실제 Kiwi를 적용하고 글자를 보존한다."""
+    lines = [
+        {"text": "지금나는공부한다", "polygon": [[0, 0], [300, 0], [300, 50], [0, 50]]},
+        {"text": "”", "polygon": [[298, 6], [311, 6], [311, 19], [298, 19]]},
+    ]
+    restored = restore_paragraphs(lines)
+    repaired = repairer.repair(restored)
+    assert repaired["geometry_applied"]
+    assert "spacing" in repaired
+    assert repaired["text"] != restored["text"]
+    assert re.sub(r"\s", "", repaired["text"]) == "지금나는공부한다”"
 
 
 def test_non_whitespace_edits_are_rejected():

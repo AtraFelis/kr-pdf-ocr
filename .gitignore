@@ -12,6 +12,7 @@ user_data/
 # Local environments and caches
 .venv/
 .venv-paddle/
+.venv-doc-parser/
 venv/
 __pycache__/
 *.py[cod]
