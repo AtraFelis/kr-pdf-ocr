@@ -57,10 +57,10 @@ python -m venv .venv
 # 문단 복원과 선택적 한국어 띄어쓰기 보정
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --repair-spacing --output "output/restored-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 사전은 화면의 사전 관리에서 저장한 실제 JSON 경로를 지정한다
-# 저장된 OCR JSON 재처리(모델 재실행 없음)
-.\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02/page-001.json --repair-spacing --output "output/reprocessed-$(Get-Date -Format yyyyMMdd-HHmmss)"
+# 저장된 OCR JSON 재처리(모델 재실행 없음): 이 컴퓨터의 보관 경로, 다른 환경은 실제 결과 경로 지정
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/_archive/cleanup-20261013-150057/ocr-run-02/page-001.json --repair-spacing --output "output/reprocessed-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 사전 적용 재보정: 단일 JSON 또는 결과 폴더 입력, 실제 사전 경로로 변경
-.\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02 --repair-spacing --dictionary user_data/dictionaries/실제파일.json --output "output/dictionary-$(Get-Date -Format yyyyMMdd-HHmmss)"
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/_archive/cleanup-20261013-150057/ocr-run-02 --repair-spacing --dictionary user_data/dictionaries/실제파일.json --output "output/dictionary-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 페이지 제외와 기준 높이 1000px의 200~800px 선택
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-3 --exclude-pages 2,3 --y-range 200,800 --reference-height 1000 --output "output/region-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 구조 분석 전용 환경: 네트워크 설치, 기존 두 환경과 분리

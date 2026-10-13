@@ -27,8 +27,9 @@
 
 ## 개발 기록
 
-`docs/history/`에는 모델 선택 근거, 환경 구성 이력, 실험·검증 결과, 발견한 오류와 당시의 한계를 둔다.
+`docs/history/`에는 모델 선택 근거, 환경 구성 이력, 실험·검증 결과, 발견한 오류와 당시의 한계를 둔다. 과거의 Draft·다음 단계·미구현 표기는 작성 당시 상태다. 현재 상태는 [개발 목록](TASKS.md)과 기능 사용법을 기준으로 읽는다. PR #8은 2026-10-13 병합됐고, 이전 output의 보관 위치는 [최신화 기록](history/DOCS_STATUS_REFRESH.md)을 따른다.
 
+- [2026-10-13 문서 상태·보관 경로 최신화](history/DOCS_STATUS_REFRESH.md)
 - [OCR 실행 환경·샘플 시험 기록](history/OCR_SETUP.md)
 - [OCR 모델 선택 기록](history/MODEL_SELECTION.md)
 - [기능 구현·검증 기록](history/IMPLEMENTATION_LOG.md)
