@@ -273,6 +273,7 @@ def main():
                     "exclude_hanja_annotations": not args.keep_hanja,
                     "device": getattr(engine, "device", "cpu"),
                     "requested_device": requested_device,
+                    "ocr_settings": getattr(engine, "settings", None),
                     "dpi": args.dpi,
                     "initialization_seconds": initialization,
                     "network_connections_blocked": True,

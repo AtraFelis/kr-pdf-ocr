@@ -119,6 +119,7 @@ def test_cli_crops_before_ocr_and_combines_only_selected_pages(
 
         def __init__(self, root, device="cpu"):
             """실제 모델·장치를 로딩하지 않고 CLI 엔진 대역을 생성한다."""
+            self.settings = {"text_det_box_thresh": 0.5}
 
         def recognize(self, image):
             """잘린 이미지의 크기를 기록하고 고정 텍스트·입력 좌표를 반환한다."""
@@ -159,6 +160,7 @@ def test_cli_crops_before_ocr_and_combines_only_selected_pages(
     assert calls == [(600, 600)]
     summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
     assert summary["selected_pages"] == [2]
+    assert summary["ocr_settings"] == {"text_det_box_thresh": 0.5}
     record = summary["completed_pages"][0]
     assert record["region_pixel_box"] == [0, 200, 600, 800]
     assert record["lines"][0]["polygon"][0] == [0, 200]
