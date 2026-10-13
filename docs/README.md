@@ -7,6 +7,7 @@
 `docs/`에는 현재 요구사항·작업 목록·기능 사용법을 둔다.
 
 - [기획서](PLAN.md)
+- [별도 세션용 OCR 문자 교정 모델 학습 기획서](OCR_CORRECTION_TRAINING_PLAN.md)
 - [개발 목록](TASKS.md)
 - [데스크톱 사용법](DESKTOP_APP.md)
 - [페이지·영역 선택](PAGE_SELECTION.md)

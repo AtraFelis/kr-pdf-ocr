@@ -5,6 +5,7 @@ Windows에서 로컬 AI 모델로 한국어 PDF를 인식하고, 페이지·영�
 ## 문서
 
 - [기획서](docs/PLAN.md)
+- [별도 세션용 OCR 문자 교정 모델 학습 기획서](docs/OCR_CORRECTION_TRAINING_PLAN.md)
 - [개발 목록](docs/TASKS.md)
 - [문서 분류와 저장 위치](docs/README.md)
 - [Git 컨벤션](docs/rules/GIT_CONVENTIONS.md)
