@@ -404,3 +404,100 @@ def test_cli_invalid_markdown_combinations_fail_before_output(
         cli.main()
     assert error.value.code == 2
     assert not output.exists()
+
+
+def test_hidden_preview_waits_for_tab_selection(application, tmp_path, monkeypatch):
+    """원문 편집 중 렌더링을 생략하고 미리보기 선택 시 최신 내용만 표시한다."""
+    window = OCRWindow(root=tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        window.markdown_preview,
+        "display",
+        lambda text, root: calls.append((text, root)),
+    )
+    window.result_format = "md"
+    window.result_folder = tmp_path / "result"
+    window.editor.setPlainText("# 첫 편집")
+    window.editor.setPlainText("# 최신 편집")
+    assert calls == [] and window.save_button.isEnabled()
+    window.result_tabs.setCurrentWidget(window.markdown_preview)
+    assert calls == [("# 최신 편집", window.result_folder)]
+    window.result_tabs.setCurrentWidget(window.editor)
+    window.editor.setPlainText("# 다시 편집")
+    assert len(calls) == 1
+    window.result_tabs.setCurrentWidget(window.markdown_preview)
+    assert calls[-1][0] == "# 다시 편집"
+    window.result_format = "txt"
+    window.editor.setPlainText("TXT 결과")
+    window.update_markdown_preview()
+    assert len(calls) == 2
+    window.editor.document().setModified(False)
+    window.close()
+
+
+def test_export_changes_only_image_destinations(application, tmp_path):
+    """본문·일반 링크·코드의 assets 문자열을 보존하고 실제 이미지 경로만 바꾼다."""
+    source = tmp_path / "source"
+    create_asset(source)
+    preserved = (
+        "설명: assets/report.pdf. 그리고 assets/a.png.\n\n"
+        "[일반 링크](assets/missing.pdf)\n\n"
+        "`![예시](assets/missing.png)`\n\n"
+        '```md\n<img src="assets/missing.png">\n```\n\n'
+    )
+    text = preserved + (
+        '![그림](assets/a.png "설명 assets/missing.png").\n'
+        '<img class="x" src="assets/a.png" alt="assets/missing.png" width="4%">'
+    )
+    target = tmp_path / "export.md"
+    save_markdown(target, text, source)
+    exported = target.read_text(encoding="utf-8")
+    assert exported.startswith(preserved)
+    assert '"설명 assets/missing.png").' in exported
+    assert 'alt="assets/missing.png" width="4%"' in exported
+    assert exported.count("export_assets-") == 2
+    assert len(list(tmp_path.glob("export_assets-*/image-001.png"))) == 1
+
+
+def test_export_plain_asset_text_needs_no_source(application, tmp_path):
+    """실제 이미지가 없는 본문의 경로는 원래 결과 폴더 없이도 그대로 저장한다."""
+    text = "assets/report.pdf.\nassets/a.png\n[경로](assets/a.png)"
+    path = tmp_path / "plain.md"
+    save_markdown(path, text, None)
+    assert path.read_text(encoding="utf-8") == text
+    assert not list(tmp_path.glob("*_assets-*"))
+
+
+@pytest.mark.parametrize(
+    "sources",
+    [
+        ("imgs/a.jpg", "imgs/a.jpg_1.jpg"),
+        ("imgs/a.jpg", "assets/page-001-001.png"),
+        ("imgs/a[1].jpg", "imgs/a[1].jpg_1.jpg"),
+    ],
+)
+def test_structure_replaces_overlapping_paths_once(tmp_path, sources):
+    """원본 경로 접두사·생성 경로 충돌·정규식 문자가 있어도 재치환하지 않는다."""
+    result = synthetic_result()
+    result.markdown["markdown_images"]["imgs/a.png"].close()
+    images = {
+        sources[0]: Image.new("RGB", (8, 8), "red"),
+        sources[1]: Image.new("RGB", (8, 8), "blue"),
+    }
+    result.markdown["markdown_images"] = images
+    result.markdown["markdown_texts"] = (
+        f'![첫 그림]({sources[0]})\n<img src="{sources[1]}">'
+    )
+    try:
+        record = structure.save_structure(
+            result, tmp_path, 1, (0, 0, 200, 200), 200, 200
+        )
+        assert record["markdown"] == (
+            '![첫 그림](assets/page-001-001.png)\n<img src="assets/page-001-002.png">'
+        )
+        for index, color in ((1, (255, 0, 0)), (2, (0, 0, 255))):
+            with Image.open(tmp_path / f"assets/page-001-{index:03}.png") as image:
+                assert image.getpixel((0, 0)) == color
+    finally:
+        for image in images.values():
+            image.close()
