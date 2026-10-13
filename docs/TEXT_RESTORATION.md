@@ -34,7 +34,7 @@ OCR이 같은 줄의 닫는 따옴표·마침표 등을 별도 작은 영역으�
 # OCR부터 문단 복원과 띄어쓰기 보정까지
 .\.venv\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1-2 --repair-spacing --output "output/paragraphs-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 저장한 JSON만 재처리
-.\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02/page-001.json --repair-spacing --output "output/reprocess-$(Get-Date -Format yyyyMMdd-HHmmss)"
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/_archive/cleanup-20261013-150057/ocr-run-02/page-001.json --repair-spacing --output "output/reprocess-$(Get-Date -Format yyyyMMdd-HHmmss)"
 ```
 
 재처리 도구는 PDF나 OCR 모델을 다시 열지 않는다. 기본 OCR 명령은 문단 복원만 적용하고 Kiwi 보정은 명시적으로 선택한다. `--keep-line-breaks`와 `--repair-spacing`은 함께 사용할 수 없다.
@@ -45,4 +45,8 @@ OCR이 같은 줄의 닫는 따옴표·마침표 등을 별도 작은 영역으�
 
 샘플 비교 결과와 실행 조건은 [문단 복원 검증 기록](history/IMPLEMENTATION_LOG.md#문단-복원과-띄어쓰기-보정)을 참조한다.
 
-페이지 사이 문단 연결, 사용자가 확인 항목을 수정하는 화면, 단어 경계 완전 자동 판정과 표·다단 처리는 후속 작업이다. 현재 문단 경계는 휴리스틱이므로 원문 미리보기와 대조해야 한다.
+오류 샘플의 작은 닫는 부호로 인한 보정 중단은 수정됐다. 좌표 누락·미해결 겹침에서는 현재 페이지 전체의 기존 줄과 순서를 보존하고 Kiwi도 건너뛴다. 해당 제외 이유의 상세 화면 표시와 정상 영역만 부분 복원하는 기능은 후속 작업이다. 페이지 사이 문단 연결, 단어 경계 완전 자동 판정과 표·다단 처리도 후속 작업이다. 재인식 후보 비교·편집기 반영은 [별도 기능](SHORT_TEXT_RETRY.md)으로 제공한다. 현재 문단 경계는 휴리스틱이므로 원문 미리보기와 대조해야 한다.
+
+## 저장 결과 경로
+
+2026-10-13 정리 이전의 예제 입력은 `output/_archive/cleanup-20261013-150057/`로 이동했다. 새로 실행한 결과를 사용할 때는 명령의 입력을 실제 페이지 JSON 또는 결과 폴더로 바꾼다. 보관 폴더 이름은 이번 컴퓨터의 정리 기록이며 다른 환경에 자동 생성되지 않는다.

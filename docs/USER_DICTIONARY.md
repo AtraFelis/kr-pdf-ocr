@@ -48,7 +48,11 @@
 # PP-OCRv5: 사전은 --repair-spacing과 함께 사용
 .\.venv-paddle\Scripts\python.exe -m pdf_ocr.cli samples/input/sample.pdf --pages 1 --device cpu --repair-spacing --dictionary user_data/dictionaries/실제파일.json --output "output/dictionary-$(Get-Date -Format yyyyMMdd-HHmmss)"
 # 저장 단일 페이지 또는 결과 폴더: OCR 모델 재실행 없음
-.\.venv\Scripts\python.exe -m pdf_ocr.restore output/ocr-run-02 --repair-spacing --dictionary user_data/dictionaries/실제파일.json --output "output/reprocess-$(Get-Date -Format yyyyMMdd-HHmmss)"
+.\.venv\Scripts\python.exe -m pdf_ocr.restore output/_archive/cleanup-20261013-150057/ocr-run-02 --repair-spacing --dictionary user_data/dictionaries/실제파일.json --output "output/reprocess-$(Get-Date -Format yyyyMMdd-HHmmss)"
 ```
 
 재보정은 `combined.txt`(최종), `without-dictionary.txt`(사전 미적용), `before-spacing.txt`(공백 보정 전), 페이지 JSON·TXT와 사전 스냅샷을 저장한다. 단일 페이지에서는 기존 `restored.txt`와 `restoration.json`도 유지한다. 비교 기준과 제안은 `restoration.spacing`·`restoration.reviews`에 있다.
+
+## 저장 결과 경로
+
+2026-10-13 정리 이전의 예제 입력은 `output/_archive/cleanup-20261013-150057/`로 이동했다. 새로 실행한 결과를 사용할 때는 명령의 입력을 실제 페이지 JSON 또는 결과 폴더로 바꾼다. 보관 폴더 이름은 이번 컴퓨터의 정리 기록이며 다른 환경에 자동 생성되지 않는다.
